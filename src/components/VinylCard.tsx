@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import type { AlbumDetails, Vinyl } from '../types';
-import { getVinylDetails, updateVinyl } from '../utils/api';
+import type { AlbumCandidate, AlbumDetails, Vinyl } from '../types';
+import { getVinylDetails, selectVinylMetadataCandidate, updateVinyl } from '../utils/api';
 import { ImageUpload } from './ImageUpload';
 
 interface VinylCardProps {
@@ -8,15 +8,6 @@ interface VinylCardProps {
   isAdmin?: boolean;
   onDelete?: (id: string) => void;
   onUpdate?: () => void;
-}
-
-interface AlbumCandidate {
-  id: string;
-  title: string;
-  artist: string;
-  release_year?: number;
-  disambiguation?: string;
-  source_url: string;
 }
 
 function parseCandidates(value?: string | null): AlbumCandidate[] {
@@ -33,6 +24,28 @@ function parseCandidates(value?: string | null): AlbumCandidate[] {
 
 function isGeneratedMetadataNote(notes?: string | null): boolean {
   return notes?.trim().toLowerCase().startsWith('metadata:') ?? false;
+}
+
+function metadataNeedsAdminReview(status: Vinyl['metadata_status']): boolean {
+  return status !== 'complete' && status !== 'disabled';
+}
+
+function metadataAlertLabel(status: Vinyl['metadata_status']): string {
+  switch (status) {
+    case 'needs_choice':
+      return 'Pick match';
+    case 'not_found':
+      return 'No metadata';
+    case 'error':
+      return 'Metadata error';
+    case 'pending':
+      return 'Pending metadata';
+    case 'disabled':
+      return 'Metadata disabled';
+    case 'complete':
+    default:
+      return 'Metadata complete';
+  }
 }
 
 function metadataLabel(status: Vinyl['metadata_status']): string {
@@ -194,15 +207,45 @@ function AlbumDetailsModal({
   );
 }
 
-function MetadataDetails({ vinyl }: { vinyl: Vinyl }) {
+function MetadataDetails({
+  vinyl,
+  onSelectCandidate,
+}: {
+  vinyl: Vinyl;
+  onSelectCandidate?: (candidate: AlbumCandidate) => Promise<void>;
+}) {
   const candidates = parseCandidates(vinyl.metadata_candidates);
+  const [selectingId, setSelectingId] = useState<string | null>(null);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
+
+  const handleSelectCandidate = async (candidate: AlbumCandidate) => {
+    if (!onSelectCandidate) {
+      return;
+    }
+
+    setSelectingId(candidate.id);
+    setSelectionError(null);
+
+    try {
+      await onSelectCandidate(candidate);
+    } catch (err) {
+      setSelectionError(err instanceof Error ? err.message : 'Failed to select metadata match');
+    } finally {
+      setSelectingId(null);
+    }
+  };
 
   return (
-    <div className="metadata-panel">
+    <div className={`metadata-panel ${metadataNeedsAdminReview(vinyl.metadata_status) ? 'metadata-panel-review' : ''}`}>
       <h4>Album metadata</h4>
       <div className={`metadata-badge metadata-${vinyl.metadata_status}`}>
         {metadataLabel(vinyl.metadata_status)}
       </div>
+      {metadataNeedsAdminReview(vinyl.metadata_status) && (
+        <p className="metadata-review-help">
+          This album needs admin review before its metadata is complete.
+        </p>
+      )}
       {vinyl.metadata_source_url && (
         <p className="metadata-source">
           <a href={vinyl.metadata_source_url} target="_blank" rel="noreferrer">
@@ -215,17 +258,38 @@ function MetadataDetails({ vinyl }: { vinyl: Vinyl }) {
           Last checked: {new Date(vinyl.metadata_checked_at).toLocaleString()}
         </p>
       )}
+      {selectionError && <p className="metadata-error">{selectionError}</p>}
       {vinyl.metadata_status === 'needs_choice' && candidates.length > 0 && (
-        <details className="metadata-candidates">
+        <details className="metadata-candidates" open>
           <summary>Review possible album matches</summary>
           <ul>
             {candidates.map((candidate) => (
-              <li key={candidate.id}>
-                <a href={candidate.source_url} target="_blank" rel="noreferrer">
-                  {candidate.artist} — {candidate.title}
-                  {candidate.release_year ? ` (${candidate.release_year})` : ''}
-                </a>
-                {candidate.disambiguation ? ` — ${candidate.disambiguation}` : ''}
+              <li key={candidate.id} className="metadata-candidate">
+                {candidate.cover_image_url ? (
+                  <img
+                    src={candidate.cover_image_url}
+                    alt={`${candidate.artist} — ${candidate.title} cover`}
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="metadata-candidate-placeholder" aria-hidden="true" />
+                )}
+                <div className="metadata-candidate-info">
+                  <strong>{candidate.artist} — {candidate.title}</strong>
+                  {candidate.release_year && <span>{candidate.release_year}</span>}
+                  {candidate.disambiguation && <small>{candidate.disambiguation}</small>}
+                  <a href={candidate.source_url} target="_blank" rel="noreferrer">
+                    View source details
+                  </a>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => handleSelectCandidate(candidate)}
+                  disabled={selectingId !== null || !onSelectCandidate}
+                >
+                  {selectingId === candidate.id ? 'Selecting…' : 'Select this match'}
+                </button>
               </li>
             ))}
           </ul>
@@ -344,6 +408,12 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
     };
   }, [isEditing, isDetailsOpen, handleCancel, handleCloseDetails]);
 
+  const handleSelectMetadataCandidate = useCallback(async (candidate: AlbumCandidate) => {
+    await selectVinylMetadataCandidate(vinyl.id, candidate);
+    setIsEditing(false);
+    onUpdate?.();
+  }, [vinyl.id, onUpdate]);
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
@@ -385,10 +455,16 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
   };
 
   const coverPreviewUrl = coverImageUrl.trim() || vinyl.cover_image_url;
+  const showMetadataReview = isAdmin && metadataNeedsAdminReview(vinyl.metadata_status);
 
   return (
     <>
-      <article className="vinyl-card">
+      <article className={`vinyl-card ${showMetadataReview ? 'vinyl-card-metadata-review' : ''}`}>
+        {showMetadataReview && (
+          <div className={`vinyl-card-alert metadata-${vinyl.metadata_status}`}>
+            {metadataAlertLabel(vinyl.metadata_status)}
+          </div>
+        )}
         <button
           type="button"
           className="vinyl-card-details-button"
@@ -433,10 +509,10 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
               <button
                 type="button"
                 onClick={handleEdit}
-                className="btn btn-secondary btn-sm"
-                aria-label={`Edit ${vinyl.title}`}
+                className={`btn btn-secondary btn-sm ${showMetadataReview ? 'btn-metadata-review' : ''}`}
+                aria-label={`Edit ${vinyl.title}${showMetadataReview ? ' and review metadata' : ''}`}
               >
-                Edit
+                {showMetadataReview ? 'Review' : 'Edit'}
               </button>
             )}
             {onDelete && (
@@ -588,7 +664,7 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
                     />
                   </div>
 
-                  <MetadataDetails vinyl={vinyl} />
+                  <MetadataDetails vinyl={vinyl} onSelectCandidate={handleSelectMetadataCandidate} />
                 </div>
               </div>
 

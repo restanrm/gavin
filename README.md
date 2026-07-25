@@ -168,6 +168,7 @@ The frontend expects the following API endpoints:
 
 - `POST /api/admin/vinyls` - Create vinyl record
 - `PUT /api/admin/vinyls/:id` - Update vinyl record. Omit unchanged fields; send `null` for optional fields (`release_year`, `notes`, `cover_image_url`) to clear them.
+- `POST /api/admin/vinyls/:id/metadata-candidate` - Apply a reviewed MusicBrainz candidate to an existing vinyl whose metadata needs a choice
 - `DELETE /api/admin/vinyls/:id` - Delete vinyl record
 - `GET /api/admin/albums/search?artist=` - Search MusicBrainz albums by artist for manual selection
 - `POST /api/admin/vinyls/bulk` - Bulk import vinyls
@@ -288,6 +289,8 @@ Miles Davis,Kind of Blue,1959,Essential jazz album
 Admins can import a vinyl from a photo of the album cover. In the admin UI, they can either choose an existing image or use the camera-oriented “Take photo” action on mobile devices. Gavin asks the configured vision provider to identify the cover image, resolves the detected album terms against MusicBrainz, downloads the official Cover Art Archive thumbnail into `UPLOAD_DIR/album-covers`, and stores the Gavin-served `/uploads/album-covers/...` URL for the matched album instead of storing the uploaded photo.
 
 MusicBrainz and Cover Art Archive are still used for free/open metadata and artwork. A freely available non-AI reverse-cover search API is not currently configured, so visual identification can use Gemini (`ALBUM_COVER_RECOGNITION_PROVIDER=gemini`) or ChatGPT/OpenAI (`ALBUM_COVER_RECOGNITION_PROVIDER=openai`). Because visual recognition can be wrong, Gavin always shows the uploaded cover next to candidate jackets and asks the admin to click the matching jacket before importing.
+
+When metadata lookup returns multiple possible matches for an existing album, admins see a highlighted review badge in the catalog. Opening the album editor shows clickable candidate rows, each with a separate source-details link and a “Select this match” button that applies the chosen metadata to the existing vinyl.
 
 If imports fail with `429 Too Many Requests`, check the configured provider's free-tier/API limits. Gavin retries transient 429s, but quota exhaustion must be fixed in the provider account or by using another key/provider.
 

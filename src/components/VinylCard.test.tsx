@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { VinylCard } from '../components/VinylCard';
 import type { Vinyl } from '../types';
 
@@ -117,6 +117,42 @@ describe('VinylCard', () => {
 
     expect(screen.getByText('Metadata choice required')).toBeInTheDocument();
     expect(screen.getByText('Review possible album matches')).toBeInTheDocument();
+  });
+
+  it('selects a reviewed metadata candidate for an existing vinyl', async () => {
+    const onUpdate = vi.fn();
+    const candidate = {
+      source: 'musicbrainz',
+      id: 'mbid',
+      artist: 'The Beatles',
+      title: 'Abbey Road',
+      release_year: 1969,
+      source_url: 'https://musicbrainz.org/release-group/mbid',
+    };
+    const needsChoice: Vinyl = {
+      ...mockVinyl,
+      metadata_status: 'needs_choice',
+      metadata_candidates: JSON.stringify([candidate]),
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ...needsChoice, metadata_status: 'complete', metadata_source_id: candidate.id }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<VinylCard vinyl={needsChoice} isAdmin onUpdate={onUpdate} />);
+
+    fireEvent.click(screen.getByLabelText(/edit abbey road/i));
+    fireEvent.click(screen.getByRole('button', { name: /select this match/i }));
+
+    await waitFor(() => expect(onUpdate).toHaveBeenCalled());
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/admin/vinyls/1/metadata-candidate',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ candidate }),
+      }),
+    );
   });
 
   it('handles optional fields being absent', () => {

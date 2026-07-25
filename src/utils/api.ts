@@ -98,6 +98,13 @@ export async function createVinylFromCandidate(candidate: AlbumCandidate): Promi
   });
 }
 
+export async function selectVinylMetadataCandidate(id: string, candidate: AlbumCandidate): Promise<Vinyl> {
+  return fetchJSON<Vinyl>(`${BASE_URL}/admin/vinyls/${id}/metadata-candidate`, {
+    method: 'POST',
+    body: JSON.stringify({ candidate }),
+  });
+}
+
 export async function importCoverImage(file: File): Promise<CoverImportResponse> {
   const formData = new FormData();
   formData.append('file', file);

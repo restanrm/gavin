@@ -186,6 +186,19 @@ pub async fn import_cover_candidate(
         .map(Json)
 }
 
+/// Apply a reviewed MusicBrainz candidate to an existing vinyl.
+pub async fn select_vinyl_metadata_candidate(
+    State(state): State<AppState>,
+    session: Session,
+    Path(id): Path<String>,
+    Json(request): Json<CandidateImportRequest>,
+) -> Result<Json<Vinyl>> {
+    require_admin(&state, &session).await?;
+    apply_candidate_to_vinyl(&state, &id, request.candidate)
+        .await
+        .map(Json)
+}
+
 /// Upload a file
 pub async fn upload_file(
     State(state): State<AppState>,
@@ -293,20 +306,10 @@ async fn create_vinyl_from_candidate(
     state: &AppState,
     candidate: AlbumCandidate,
 ) -> Result<Vinyl> {
-    if candidate.artist.trim().is_empty() || candidate.title.trim().is_empty() {
-        return Err(AppError::InvalidInput(
-            "candidate artist and title are required".to_string(),
-        ));
-    }
+    validate_candidate_identity(&candidate)?;
 
     let notes = Some(format!("Metadata: {}", candidate.source_url));
-    let cover_image_url = match candidate.cover_image_url.as_deref() {
-        Some(url) => state
-            .metadata_client
-            .local_cover_url(Some(&candidate.id), url)
-            .await,
-        None => None,
-    };
+    let cover_image_url = local_candidate_cover_url(state, &candidate).await;
     let vinyl = Vinyl::create(
         &state.pool,
         CreateVinyl {
@@ -338,6 +341,91 @@ async fn create_vinyl_from_candidate(
     .await?;
 
     Vinyl::get(&state.pool, &vinyl.id).await
+}
+
+async fn apply_candidate_to_vinyl(
+    state: &AppState,
+    id: &str,
+    candidate: AlbumCandidate,
+) -> Result<Vinyl> {
+    validate_candidate_identity(&candidate)?;
+
+    let existing = Vinyl::get(&state.pool, id).await?;
+    let cover_image_url = local_candidate_cover_url(state, &candidate).await;
+    let metadata_note = format!("Metadata: {}", candidate.source_url);
+    let notes_update = if existing
+        .notes
+        .as_deref()
+        .map(|notes| notes.trim().is_empty() || is_generated_metadata_note(notes))
+        .unwrap_or(true)
+    {
+        Some(metadata_note.clone())
+    } else {
+        None
+    };
+
+    Vinyl::update(
+        &state.pool,
+        id,
+        UpdateVinyl {
+            artist: PatchField::Value(candidate.artist.clone()),
+            title: PatchField::Value(candidate.title.clone()),
+            release_year: candidate
+                .release_year
+                .map_or(PatchField::Missing, PatchField::Value),
+            notes: notes_update
+                .clone()
+                .map_or(PatchField::Missing, PatchField::Value),
+            cover_image_url: cover_image_url
+                .clone()
+                .map_or(PatchField::Missing, PatchField::Value),
+        },
+    )
+    .await?;
+
+    Vinyl::update_metadata(
+        &state.pool,
+        id,
+        MetadataUpdate {
+            release_year: candidate.release_year,
+            notes: notes_update,
+            cover_image_url,
+            metadata_status: "complete".to_string(),
+            metadata_source: Some(candidate.source),
+            metadata_source_id: Some(candidate.id),
+            metadata_source_url: Some(candidate.source_url),
+            metadata_candidates: None,
+            metadata_error: None,
+            metadata_checked_at: Some(Utc::now()),
+        },
+    )
+    .await?;
+
+    Vinyl::get(&state.pool, id).await
+}
+
+async fn local_candidate_cover_url(state: &AppState, candidate: &AlbumCandidate) -> Option<String> {
+    match candidate.cover_image_url.as_deref() {
+        Some(url) => state
+            .metadata_client
+            .local_cover_url(Some(&candidate.id), url)
+            .await,
+        None => None,
+    }
+}
+
+fn validate_candidate_identity(candidate: &AlbumCandidate) -> Result<()> {
+    if candidate.artist.trim().is_empty() || candidate.title.trim().is_empty() {
+        return Err(AppError::InvalidInput(
+            "candidate artist and title are required".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn is_generated_metadata_note(notes: &str) -> bool {
+    notes.trim().to_lowercase().starts_with("metadata:")
 }
 
 fn validate_image_field(field: &axum::extract::multipart::Field<'_>) -> Result<()> {

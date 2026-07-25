@@ -460,6 +460,36 @@
   transform: translateY(-4px);
 }
 
+.vinyl-card-metadata-review {
+  border-color: var(--color-warning-text);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-warning-text) 22%, transparent), var(--shadow-md);
+}
+
+.vinyl-card-alert {
+  position: absolute;
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
+  z-index: 2;
+  max-width: calc(100% - (2 * var(--spacing-sm)));
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  box-shadow: var(--shadow-md);
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+
+.vinyl-card-alert.metadata-error,
+.vinyl-card-alert.metadata-not_found {
+  background-color: var(--color-error-bg);
+  color: var(--color-error);
+}
+
 .vinyl-card-details-button {
   display: block;
   width: 100%;
@@ -671,6 +701,11 @@
   border-radius: var(--radius-md);
 }
 
+.metadata-panel-review {
+  border-color: var(--color-warning-text);
+  background-color: color-mix(in srgb, var(--color-warning-bg) 28%, var(--color-bg-alt));
+}
+
 .metadata-panel h4 {
   font-size: 0.95rem;
   margin-bottom: var(--spacing-sm);
@@ -703,6 +738,7 @@
   color: var(--color-error);
 }
 
+.metadata-review-help,
 .metadata-source,
 .metadata-checked,
 .metadata-candidates {
@@ -710,9 +746,77 @@
   font-size: 0.8125rem;
 }
 
+.metadata-review-help {
+  font-weight: 600;
+  color: var(--color-warning-text);
+}
+
+.metadata-candidates summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
 .metadata-candidates ul {
-  margin: var(--spacing-xs) 0 0;
-  padding-left: var(--spacing-lg);
+  display: grid;
+  gap: var(--spacing-sm);
+  margin: var(--spacing-sm) 0 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.metadata-candidate {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  gap: var(--spacing-sm);
+  align-items: center;
+  padding: var(--spacing-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+}
+
+.metadata-candidate img,
+.metadata-candidate-placeholder {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg-alt);
+}
+
+.metadata-candidate-info {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.metadata-candidate-info strong,
+.metadata-candidate-info span,
+.metadata-candidate-info small,
+.metadata-candidate-info a {
+  overflow-wrap: anywhere;
+}
+
+.metadata-candidate-info span,
+.metadata-candidate-info small {
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 640px) {
+  .metadata-candidate {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+
+  .metadata-candidate img,
+  .metadata-candidate-placeholder {
+    width: 48px;
+    height: 48px;
+  }
+
+  .metadata-candidate .btn {
+    grid-column: 1 / -1;
+  }
 }
 
 .metadata-error {
@@ -839,6 +943,16 @@
 
 .card-actions .btn {
   flex: 1;
+}
+
+.card-actions .btn-metadata-review {
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-warning-text) 45%, transparent);
+}
+
+.card-actions .btn-metadata-review:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--color-warning-bg) 75%, var(--color-warning-text));
 }
 
 /* Footer */
