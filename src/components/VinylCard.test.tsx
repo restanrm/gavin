@@ -1,9 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { VinylCard } from '../components/VinylCard';
 import type { Vinyl } from '../types';
 
 describe('VinylCard', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   const mockVinyl: Vinyl = {
     id: '1',
     artist: 'The Beatles',
@@ -36,6 +40,36 @@ describe('VinylCard', () => {
     render(<VinylCard vinyl={{ ...mockVinyl, notes: 'Metadata: https://musicbrainz.org/release-group/mbid' }} />);
 
     expect(screen.queryByText(/musicbrainz/)).not.toBeInTheDocument();
+  });
+
+  it('opens album details and renders songs when clicked', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        vinyl: mockVinyl,
+        release_group_id: 'mbid',
+        release_title: 'Abbey Road',
+        release_date: '1969-09-26',
+        release_country: 'GB',
+        release_format: '12" Vinyl',
+        source_url: 'https://musicbrainz.org/release/release-id',
+        tracklist_status: 'available',
+        tracklist_error: null,
+        tracks: [
+          { disc_number: 1, number: 'A1', title: 'Come Together', length_ms: 259000 },
+          { disc_number: 1, number: 'A2', title: 'Something', length_ms: 182000 },
+        ],
+      }),
+    }));
+
+    render(<VinylCard vinyl={mockVinyl} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /view details for abbey road/i }));
+
+    expect(screen.getByRole('dialog', { name: /abbey road/i })).toBeInTheDocument();
+    expect(await screen.findByText('Come Together')).toBeInTheDocument();
+    expect(screen.getByText('Something')).toBeInTheDocument();
+    expect(screen.getByText('1969-09-26')).toBeInTheDocument();
   });
 
   it('renders placeholder when no cover image', () => {

@@ -1,7 +1,7 @@
 //! Public API handlers
 
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     Json,
 };
 use serde::Deserialize;
@@ -20,4 +20,14 @@ pub async fn list_vinyls(
 ) -> Result<Json<Vec<Vinyl>>> {
     let vinyls = Vinyl::list(&state.pool, query.search).await?;
     Ok(Json(vinyls))
+}
+
+/// Return detailed album information for one vinyl.
+pub async fn get_vinyl_details(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<crate::album_metadata::AlbumDetails>> {
+    let vinyl = Vinyl::get(&state.pool, &id).await?;
+    let details = state.metadata_client.album_details(&vinyl).await;
+    Ok(Json(details))
 }

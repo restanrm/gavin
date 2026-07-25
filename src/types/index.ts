@@ -15,6 +15,27 @@ export interface Vinyl {
   metadata_checked_at?: string | null;
 }
 
+export interface AlbumTrack {
+  disc_number?: number | null;
+  number?: string | null;
+  title: string;
+  artist?: string | null;
+  length_ms?: number | null;
+}
+
+export interface AlbumDetails {
+  vinyl: Vinyl;
+  release_group_id?: string | null;
+  release_title?: string | null;
+  release_date?: string | null;
+  release_country?: string | null;
+  release_format?: string | null;
+  source_url?: string | null;
+  tracklist_status: 'available' | 'not_found' | 'unavailable';
+  tracklist_error?: string | null;
+  tracks: AlbumTrack[];
+}
+
 export interface User {
   authenticated: boolean;
   subject?: string;

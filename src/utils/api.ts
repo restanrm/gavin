@@ -1,4 +1,4 @@
-import type { Vinyl, User, UploadResponse, BulkImportItem, AlbumCandidate, CoverImportResponse } from '../types';
+import type { Vinyl, User, UploadResponse, BulkImportItem, AlbumCandidate, CoverImportResponse, AlbumDetails } from '../types';
 
 type VinylInput = Pick<Vinyl, 'artist' | 'title' | 'release_year' | 'notes' | 'cover_image_url'>;
 type VinylUpdateInput = Partial<{
@@ -39,6 +39,10 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
 export async function getVinyls(search?: string): Promise<Vinyl[]> {
   const params = search ? `?search=${encodeURIComponent(search)}` : '';
   return fetchJSON<Vinyl[]>(`${BASE_URL}/vinyls${params}`);
+}
+
+export async function getVinylDetails(id: string): Promise<AlbumDetails> {
+  return fetchJSON<AlbumDetails>(`${BASE_URL}/vinyls/${id}/details`);
 }
 
 export async function getAuthStatus(): Promise<User> {

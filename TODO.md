@@ -1,3 +1,2 @@
-- retrieve small pictures and store them locally instead of pulling from web at each request
-- clicking on an album should show details and list of songs (on non admin view)
-- improve main view by sorting by artists (eventually)
+- progressive web app view for mobile with at least 2 albums per line.
+- infinite scroll with seemless page load. filtering should be done server side to ensure that we have all matches

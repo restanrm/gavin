@@ -461,6 +461,94 @@ impl AlbumMetadataClient {
         Ok(candidates)
     }
 
+    /// Build public album details for a vinyl, including a MusicBrainz track list
+    /// when a release group can be identified.
+    pub async fn album_details(&self, vinyl: &Vinyl) -> AlbumDetails {
+        let mut details = AlbumDetails::from(vinyl.clone());
+
+        if !self.enabled {
+            details.tracklist_status = "unavailable".to_string();
+            details.tracklist_error = Some("Album metadata lookup is disabled".to_string());
+            return details;
+        }
+
+        let release_group = if vinyl.metadata_source.as_deref() == Some(SOURCE_NAME) {
+            vinyl.metadata_source_id.as_ref().map(|id| AlbumCandidate {
+                source: SOURCE_NAME.to_string(),
+                id: id.clone(),
+                title: vinyl.title.clone(),
+                artist: vinyl.artist.clone(),
+                release_year: vinyl.release_year,
+                cover_image_url: vinyl.cover_image_url.clone(),
+                disambiguation: None,
+                source_url: vinyl.metadata_source_url.clone().unwrap_or_else(|| {
+                    format!("https://musicbrainz.org/release-group/{id}")
+                }),
+                score: None,
+            })
+        } else {
+            match self.lookup(&vinyl.artist, &vinyl.title).await {
+                Ok(LookupOutcome::Selected(candidate)) => Some(candidate),
+                Ok(LookupOutcome::NeedsChoice(candidates)) => candidates.into_iter().next(),
+                Ok(LookupOutcome::NotFound) => None,
+                Err(err) => {
+                    tracing::warn!(
+                        vinyl_id = %vinyl.id,
+                        error = %err,
+                        "failed to identify release group for album details"
+                    );
+                    details.tracklist_status = "unavailable".to_string();
+                    details.tracklist_error = Some("Could not look up album metadata".to_string());
+                    return details;
+                }
+            }
+        };
+
+        let Some(release_group) = release_group else {
+            details.tracklist_status = "not_found".to_string();
+            return details;
+        };
+
+        details.release_group_id = Some(release_group.id.clone());
+        details.source_url = Some(release_group.source_url.clone());
+        details.release_title = Some(release_group.title);
+
+        match self
+            .fetch_release_tracklist(&release_group.id, vinyl.release_year)
+            .await
+        {
+            Ok(Some(tracklist)) => {
+                details.release_title = Some(tracklist.title);
+                details.release_date = tracklist.date;
+                details.release_country = tracklist.country;
+                details.release_format = tracklist.format;
+                details.source_url = Some(tracklist.source_url);
+                details.tracks = tracklist.tracks;
+                details.tracklist_status = if details.tracks.is_empty() {
+                    "not_found".to_string()
+                } else {
+                    "available".to_string()
+                };
+            }
+            Ok(None) => {
+                details.tracklist_status = "not_found".to_string();
+            }
+            Err(err) => {
+                tracing::warn!(
+                    vinyl_id = %vinyl.id,
+                    release_group_id = %release_group.id,
+                    error = %err,
+                    "failed to load album track list"
+                );
+                details.tracklist_status = "unavailable".to_string();
+                details.tracklist_error =
+                    Some("Could not load track list from MusicBrainz".to_string());
+            }
+        }
+
+        details
+    }
+
     async fn lookup_from_reverse_image_terms(
         &self,
         terms: &[String],
@@ -594,6 +682,90 @@ impl AlbumMetadataClient {
             .into_iter()
             .map(AlbumCandidate::from)
             .collect())
+    }
+
+    async fn fetch_release_tracklist(
+        &self,
+        release_group_id: &str,
+        preferred_year: Option<i32>,
+    ) -> anyhow::Result<Option<AlbumReleaseTracklist>> {
+        let url = format!("{}/ws/2/release", self.musicbrainz_base_url);
+
+        let response: MusicBrainzReleaseBrowseResponse = self
+            .http
+            .get(url)
+            .query(&[
+                ("release-group", release_group_id),
+                ("inc", "media+recordings+artist-credits"),
+                ("fmt", "json"),
+                ("limit", "25"),
+            ])
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+
+        let mut releases: Vec<MusicBrainzRelease> = response
+            .releases
+            .into_iter()
+            .filter(|release| release_track_count(release) > 0)
+            .collect();
+
+        if releases.is_empty() {
+            return Ok(None);
+        }
+
+        releases.sort_by(|left, right| {
+            release_tracklist_score(right, preferred_year)
+                .cmp(&release_tracklist_score(left, preferred_year))
+                .then_with(|| left.date.cmp(&right.date))
+                .then_with(|| left.title.cmp(&right.title))
+        });
+
+        let release = releases.remove(0);
+        let mut media = release.media;
+        media.sort_by_key(|medium| medium.position.unwrap_or(i32::MAX));
+
+        let mut formats = Vec::<String>::new();
+        let mut tracks = Vec::<AlbumTrack>::new();
+
+        for medium in media {
+            if let Some(format) = medium.format.as_ref().filter(|value| !value.trim().is_empty()) {
+                if !formats.iter().any(|existing| existing == format) {
+                    formats.push(format.clone());
+                }
+            }
+
+            for track in medium.tracks {
+                let title = track
+                    .title
+                    .filter(|value| !value.trim().is_empty())
+                    .or_else(|| track.recording.and_then(|recording| recording.title))
+                    .unwrap_or_else(|| "Untitled track".to_string());
+
+                tracks.push(AlbumTrack {
+                    disc_number: medium.position,
+                    number: track.number,
+                    title,
+                    artist: artist_credit_name(&track.artist_credit),
+                    length_ms: track.length,
+                });
+            }
+        }
+
+        Ok(Some(AlbumReleaseTracklist {
+            source_url: format!("https://musicbrainz.org/release/{}", release.id),
+            title: release.title,
+            date: release.date,
+            country: release.country,
+            format: if formats.is_empty() {
+                None
+            } else {
+                Some(formats.join(", "))
+            },
+            tracks,
+        }))
     }
 
     /// Cache a remote cover image and return a Gavin-served URL when possible.
@@ -824,6 +996,57 @@ pub struct AlbumCandidate {
     pub score: Option<i32>,
 }
 
+/// Public album details shown when a user opens an album from the catalog.
+#[derive(Debug, Clone, Serialize)]
+pub struct AlbumDetails {
+    pub vinyl: Vinyl,
+    pub release_group_id: Option<String>,
+    pub release_title: Option<String>,
+    pub release_date: Option<String>,
+    pub release_country: Option<String>,
+    pub release_format: Option<String>,
+    pub source_url: Option<String>,
+    pub tracklist_status: String,
+    pub tracklist_error: Option<String>,
+    pub tracks: Vec<AlbumTrack>,
+}
+
+impl From<Vinyl> for AlbumDetails {
+    fn from(vinyl: Vinyl) -> Self {
+        Self {
+            source_url: vinyl.metadata_source_url.clone(),
+            vinyl,
+            release_group_id: None,
+            release_title: None,
+            release_date: None,
+            release_country: None,
+            release_format: None,
+            tracklist_status: "not_found".to_string(),
+            tracklist_error: None,
+            tracks: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AlbumTrack {
+    pub disc_number: Option<i32>,
+    pub number: Option<String>,
+    pub title: String,
+    pub artist: Option<String>,
+    pub length_ms: Option<i32>,
+}
+
+#[derive(Debug)]
+struct AlbumReleaseTracklist {
+    source_url: String,
+    title: String,
+    date: Option<String>,
+    country: Option<String>,
+    format: Option<String>,
+    tracks: Vec<AlbumTrack>,
+}
+
 impl From<MusicBrainzReleaseGroup> for AlbumCandidate {
     fn from(group: MusicBrainzReleaseGroup) -> Self {
         let artist = group
@@ -877,6 +1100,56 @@ struct MusicBrainzReleaseGroup {
 #[derive(Debug, Deserialize)]
 struct MusicBrainzArtistCredit {
     name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct MusicBrainzReleaseBrowseResponse {
+    #[serde(default)]
+    releases: Vec<MusicBrainzRelease>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MusicBrainzRelease {
+    id: String,
+    title: String,
+    #[serde(default)]
+    date: Option<String>,
+    #[serde(default)]
+    country: Option<String>,
+    #[serde(default)]
+    status: Option<String>,
+    #[serde(default)]
+    media: Vec<MusicBrainzMedium>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MusicBrainzMedium {
+    #[serde(default)]
+    position: Option<i32>,
+    #[serde(default)]
+    format: Option<String>,
+    #[serde(default)]
+    tracks: Vec<MusicBrainzTrack>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MusicBrainzTrack {
+    #[serde(default)]
+    number: Option<String>,
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(default)]
+    length: Option<i32>,
+    #[serde(default, rename = "artist-credit")]
+    artist_credit: Vec<MusicBrainzArtistCredit>,
+    #[serde(default)]
+    recording: Option<MusicBrainzRecording>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MusicBrainzRecording {
+    #[serde(default)]
+    title: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -984,6 +1257,54 @@ fn recognition_terms(provider: &str, raw_terms: Vec<String>) -> anyhow::Result<V
     }
 
     Ok(terms)
+}
+
+fn artist_credit_name(credits: &[MusicBrainzArtistCredit]) -> Option<String> {
+    let artist = credits
+        .iter()
+        .map(|credit| credit.name.as_str())
+        .collect::<Vec<_>>()
+        .join("")
+        .trim()
+        .to_string();
+
+    if artist.is_empty() {
+        None
+    } else {
+        Some(artist)
+    }
+}
+
+fn release_track_count(release: &MusicBrainzRelease) -> usize {
+    release.media.iter().map(|medium| medium.tracks.len()).sum()
+}
+
+fn release_tracklist_score(release: &MusicBrainzRelease, preferred_year: Option<i32>) -> i32 {
+    let mut score = release_track_count(release) as i32;
+
+    if score > 0 {
+        score += 1_000;
+    }
+
+    if release
+        .status
+        .as_deref()
+        .is_some_and(|status| status.eq_ignore_ascii_case("official"))
+    {
+        score += 100;
+    }
+
+    if let (Some(preferred_year), Some(date)) = (preferred_year, release.date.as_deref()) {
+        if date
+            .get(0..4)
+            .and_then(|year| year.parse::<i32>().ok())
+            .is_some_and(|year| year == preferred_year)
+        {
+            score += 50;
+        }
+    }
+
+    score
 }
 
 fn normalize(value: &str) -> String {

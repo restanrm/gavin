@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import type { Vinyl } from '../types';
-import { updateVinyl } from '../utils/api';
+import type { AlbumDetails, Vinyl } from '../types';
+import { getVinylDetails, updateVinyl } from '../utils/api';
 import { ImageUpload } from './ImageUpload';
 
 interface VinylCardProps {
@@ -53,6 +53,147 @@ function metadataLabel(status: Vinyl['metadata_status']): string {
   }
 }
 
+function formatTrackLength(lengthMs?: number | null): string | null {
+  if (!lengthMs) {
+    return null;
+  }
+
+  const totalSeconds = Math.round(lengthMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function DetailField({ label, value }: { label: string; value?: string | number | null }) {
+  if (!value) {
+    return null;
+  }
+
+  return (
+    <div className="album-detail-field">
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}
+
+function AlbumDetailsModal({
+  vinyl,
+  details,
+  loading,
+  error,
+  onClose,
+}: {
+  vinyl: Vinyl;
+  details: AlbumDetails | null;
+  loading: boolean;
+  error: string | null;
+  onClose: () => void;
+}) {
+  const displayVinyl = details?.vinyl ?? vinyl;
+  const notes = displayVinyl.notes && !isGeneratedMetadataNote(displayVinyl.notes)
+    ? displayVinyl.notes
+    : null;
+
+  return (
+    <div className="edit-modal-backdrop" onMouseDown={onClose}>
+      <div
+        className="edit-modal album-detail-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`album-detail-heading-${vinyl.id}`}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="edit-modal-header">
+          <div>
+            <p className="edit-modal-eyebrow">Album details</p>
+            <h3 id={`album-detail-heading-${vinyl.id}`}>{displayVinyl.title}</h3>
+            <p className="album-detail-artist">{displayVinyl.artist}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="edit-modal-close"
+            aria-label="Close album details"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="album-detail-body">
+          <aside className="album-detail-cover">
+            {displayVinyl.cover_image_url ? (
+              <img src={displayVinyl.cover_image_url} alt={`${displayVinyl.title} album cover`} />
+            ) : (
+              <div className="edit-cover-placeholder" aria-hidden="true">
+                No cover available
+              </div>
+            )}
+          </aside>
+
+          <section className="album-detail-content" aria-label="Album information">
+            <dl className="album-detail-fields">
+              <DetailField label="Artist" value={displayVinyl.artist} />
+              <DetailField label="Released" value={details?.release_date ?? displayVinyl.release_year} />
+              <DetailField label="Format" value={details?.release_format} />
+              <DetailField label="Country" value={details?.release_country} />
+            </dl>
+
+            {notes && (
+              <div className="album-detail-notes">
+                <h4>Notes</h4>
+                <p>{notes}</p>
+              </div>
+            )}
+
+            {details?.source_url && (
+              <p className="album-detail-source">
+                <a href={details.source_url} target="_blank" rel="noreferrer">
+                  View source on MusicBrainz
+                </a>
+              </p>
+            )}
+
+            <div className="album-tracklist">
+              <h4>Songs</h4>
+              {loading && <p className="album-detail-muted">Loading songs…</p>}
+              {error && <p className="metadata-error">{error}</p>}
+              {!loading && !error && details?.tracks.length ? (
+                <ol>
+                  {details.tracks.map((track, index) => {
+                    const length = formatTrackLength(track.length_ms);
+                    return (
+                      <li key={`${track.disc_number ?? 1}-${track.number ?? index}-${track.title}`}>
+                        <span className="track-number">
+                          {track.disc_number && track.disc_number > 1 ? `${track.disc_number}.` : ''}
+                          {track.number ?? index + 1}
+                        </span>
+                        <span className="track-title">
+                          {track.title}
+                          {track.artist && track.artist !== displayVinyl.artist && (
+                            <small>{track.artist}</small>
+                          )}
+                        </span>
+                        {length && <span className="track-length">{length}</span>}
+                      </li>
+                    );
+                  })}
+                </ol>
+              ) : null}
+              {!loading && !error && details && details.tracks.length === 0 && (
+                <p className="album-detail-muted">
+                  No song list is available yet for this album.
+                  {details.tracklist_error ? ` ${details.tracklist_error}.` : ''}
+                </p>
+              )}
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MetadataDetails({ vinyl }: { vinyl: Vinyl }) {
   const candidates = parseCandidates(vinyl.metadata_candidates);
 
@@ -99,6 +240,10 @@ function MetadataDetails({ vinyl }: { vinyl: Vinyl }) {
 
 export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylCardProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [albumDetails, setAlbumDetails] = useState<AlbumDetails | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
   const [artist, setArtist] = useState(vinyl.artist);
   const [title, setTitle] = useState(vinyl.title);
   const [releaseYear, setReleaseYear] = useState(vinyl.release_year?.toString() ?? '');
@@ -132,14 +277,60 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
     setIsEditing(false);
   }, [resetForm]);
 
+  const handleOpenDetails = () => {
+    setAlbumDetails(null);
+    setDetailsError(null);
+    setIsDetailsOpen(true);
+  };
+
+  const handleCloseDetails = useCallback(() => {
+    setIsDetailsOpen(false);
+  }, []);
+
   useEffect(() => {
-    if (!isEditing) {
+    if (!isDetailsOpen) {
+      return undefined;
+    }
+
+    let ignore = false;
+    setDetailsLoading(true);
+    setDetailsError(null);
+
+    getVinylDetails(vinyl.id)
+      .then((details) => {
+        if (!ignore) {
+          setAlbumDetails(details);
+        }
+      })
+      .catch((err) => {
+        if (!ignore) {
+          setDetailsError(err instanceof Error ? err.message : 'Failed to load album details');
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setDetailsLoading(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [isDetailsOpen, vinyl.id]);
+
+  useEffect(() => {
+    const modalOpen = isEditing || isDetailsOpen;
+    if (!modalOpen) {
       return undefined;
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        handleCancel();
+        if (isEditing) {
+          handleCancel();
+        } else {
+          handleCloseDetails();
+        }
       }
     };
 
@@ -151,7 +342,7 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
       document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isEditing, handleCancel]);
+  }, [isEditing, isDetailsOpen, handleCancel, handleCloseDetails]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -198,36 +389,43 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
   return (
     <>
       <article className="vinyl-card">
-        <div className="vinyl-cover">
-          {vinyl.cover_image_url ? (
-            <img
-              src={vinyl.cover_image_url}
-              alt={`${vinyl.title} album cover`}
-              loading="lazy"
-            />
-          ) : (
-            <div className="vinyl-placeholder" aria-hidden="true">
-              <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
-                <circle cx="40" cy="40" r="35" stroke="currentColor" strokeWidth="2" />
-                <circle cx="40" cy="40" r="8" fill="currentColor" />
-                <circle cx="40" cy="40" r="20" stroke="currentColor" strokeWidth="1" opacity="0.3" />
-              </svg>
-            </div>
-          )}
-        </div>
+        <button
+          type="button"
+          className="vinyl-card-details-button"
+          onClick={handleOpenDetails}
+          aria-label={`View details for ${vinyl.title} by ${vinyl.artist}`}
+        >
+          <div className="vinyl-cover">
+            {vinyl.cover_image_url ? (
+              <img
+                src={vinyl.cover_image_url}
+                alt={`${vinyl.title} album cover`}
+                loading="lazy"
+              />
+            ) : (
+              <div className="vinyl-placeholder" aria-hidden="true">
+                <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+                  <circle cx="40" cy="40" r="35" stroke="currentColor" strokeWidth="2" />
+                  <circle cx="40" cy="40" r="8" fill="currentColor" />
+                  <circle cx="40" cy="40" r="20" stroke="currentColor" strokeWidth="1" opacity="0.3" />
+                </svg>
+              </div>
+            )}
+          </div>
 
-        <div className="vinyl-info">
-          <h3 className="vinyl-title">{vinyl.title}</h3>
-          <p className="vinyl-artist">{vinyl.artist}</p>
-          {vinyl.release_year && (
-            <p className="vinyl-year" aria-label={`Released in ${vinyl.release_year}`}>
-              {vinyl.release_year}
-            </p>
-          )}
-          {vinyl.notes && !isGeneratedMetadataNote(vinyl.notes) && (
-            <p className="vinyl-notes">{vinyl.notes}</p>
-          )}
-        </div>
+          <div className="vinyl-info">
+            <h3 className="vinyl-title">{vinyl.title}</h3>
+            <p className="vinyl-artist">{vinyl.artist}</p>
+            {vinyl.release_year && (
+              <p className="vinyl-year" aria-label={`Released in ${vinyl.release_year}`}>
+                {vinyl.release_year}
+              </p>
+            )}
+            {vinyl.notes && !isGeneratedMetadataNote(vinyl.notes) && (
+              <p className="vinyl-notes">{vinyl.notes}</p>
+            )}
+          </div>
+        </button>
 
         {isAdmin && (onUpdate || onDelete) && (
           <div className="card-actions">
@@ -254,6 +452,16 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
           </div>
         )}
       </article>
+
+      {isDetailsOpen && (
+        <AlbumDetailsModal
+          vinyl={vinyl}
+          details={albumDetails}
+          loading={detailsLoading}
+          error={detailsError}
+          onClose={handleCloseDetails}
+        />
+      )}
 
       {isEditing && (
         <div className="edit-modal-backdrop" onMouseDown={handleCancel}>

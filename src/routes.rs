@@ -59,6 +59,7 @@ pub async fn create_router(
     let api_routes = Router::new()
         .route("/health", get(handlers::health))
         .route("/vinyls", get(handlers::public::list_vinyls))
+        .route("/vinyls/:id/details", get(handlers::public::get_vinyl_details))
         .route("/auth/login", get(handlers::auth::login))
         .route("/auth/callback", get(handlers::auth::callback))
         .route("/auth/logout", post(handlers::auth::logout))

@@ -159,6 +159,7 @@ The frontend expects the following API endpoints:
 ### Public Endpoints
 
 - `GET /api/vinyls?search=` - Get all vinyls (with optional search)
+- `GET /api/vinyls/:id/details` - Get album details for a vinyl, including MusicBrainz song lists when available
 - `GET /api/auth/me` - Get authentication status
 - `GET /api/auth/login` - Redirect to OIDC login
 - `POST /api/auth/logout` - Logout
@@ -193,6 +194,28 @@ The frontend expects the following API endpoints:
   metadata_candidates?: string | null; // JSON array of possible matches when metadata_status is needs_choice
   metadata_error?: string | null;
   metadata_checked_at?: string | null;
+}
+```
+
+**Album Details Response** (`GET /api/vinyls/:id/details`):
+```typescript
+{
+  vinyl: Vinyl;
+  release_group_id?: string | null;
+  release_title?: string | null;
+  release_date?: string | null;
+  release_country?: string | null;
+  release_format?: string | null;
+  source_url?: string | null;
+  tracklist_status: 'available' | 'not_found' | 'unavailable';
+  tracklist_error?: string | null;
+  tracks: Array<{
+    disc_number?: number | null;
+    number?: string | null;
+    title: string;
+    artist?: string | null;
+    length_ms?: number | null;
+  }>;
 }
 ```
 

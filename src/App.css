@@ -438,6 +438,23 @@
   transform: translateY(-4px);
 }
 
+.vinyl-card-details-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.vinyl-card-details-button:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: -3px;
+}
+
 .vinyl-cover {
   width: 100%;
   aspect-ratio: 1;
@@ -679,6 +696,115 @@
 .metadata-error {
   margin-top: var(--spacing-xs);
   color: var(--color-error);
+  font-size: 0.8125rem;
+}
+
+.album-detail-modal {
+  width: min(1040px, 100%);
+}
+
+.album-detail-artist {
+  margin-top: var(--spacing-xs);
+  color: var(--color-text-muted);
+}
+
+.album-detail-body {
+  display: grid;
+  gap: var(--spacing-xl);
+  padding: var(--spacing-xl);
+}
+
+@media (min-width: 800px) {
+  .album-detail-body {
+    grid-template-columns: 320px 1fr;
+    align-items: start;
+  }
+}
+
+.album-detail-cover img,
+.album-detail-cover .edit-cover-placeholder {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-bg-alt);
+}
+
+.album-detail-content {
+  min-width: 0;
+}
+
+.album-detail-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.album-detail-field {
+  padding: var(--spacing-sm);
+  background-color: var(--color-bg-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.album-detail-field dt {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.album-detail-field dd {
+  margin-top: var(--spacing-xs);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.album-detail-notes,
+.album-tracklist {
+  margin-top: var(--spacing-lg);
+}
+
+.album-detail-notes h4,
+.album-tracklist h4 {
+  margin-bottom: var(--spacing-sm);
+  font-size: 1rem;
+}
+
+.album-detail-source,
+.album-detail-muted {
+  margin-top: var(--spacing-md);
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.album-tracklist ol {
+  display: grid;
+  gap: var(--spacing-xs);
+  list-style: none;
+}
+
+.album-tracklist li {
+  display: grid;
+  grid-template-columns: 3.5rem 1fr auto;
+  gap: var(--spacing-sm);
+  align-items: baseline;
+  padding: var(--spacing-sm);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.track-number,
+.track-length {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.track-title small {
+  display: block;
+  color: var(--color-text-muted);
   font-size: 0.8125rem;
 }
 
