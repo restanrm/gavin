@@ -1,0 +1,4 @@
+- remove metadata from jackets 
+- retrieve small pictures and store them locally instead of pulling from web at each request
+- edit album data in the admin section. Remove metadata informations on the main view.
+- improve main view by sorting by artists (eventually)

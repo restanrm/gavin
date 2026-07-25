@@ -1,7 +1,7 @@
 //! Admin API handlers (require authentication)
 
 use axum::{
-    extract::{Multipart, Path, State},
+    extract::{Multipart, Path, Query, State},
     Json,
 };
 use chrono::Utc;
@@ -104,6 +104,36 @@ pub struct CoverImportResponse {
 #[derive(Deserialize)]
 pub struct CandidateImportRequest {
     pub candidate: AlbumCandidate,
+}
+
+#[derive(Deserialize)]
+pub struct ArtistAlbumSearchQuery {
+    pub artist: String,
+}
+
+/// Search albums by artist for manual selection/import.
+pub async fn search_artist_albums(
+    State(state): State<AppState>,
+    session: Session,
+    Query(query): Query<ArtistAlbumSearchQuery>,
+) -> Result<Json<Vec<AlbumCandidate>>> {
+    require_admin(&state, &session).await?;
+
+    tracing::info!(artist = %query.artist, "admin artist album search requested");
+
+    let candidates = state
+        .metadata_client
+        .search_artist_albums(&query.artist)
+        .await
+        .map_err(|err| AppError::InvalidInput(err.to_string()))?;
+
+    tracing::info!(
+        artist = %query.artist,
+        results = candidates.len(),
+        "admin artist album search completed"
+    );
+
+    Ok(Json(candidates))
 }
 
 /// Import a vinyl by visually recognizing an uploaded album-cover photo.

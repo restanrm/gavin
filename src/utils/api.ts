@@ -14,7 +14,16 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    let message = `HTTP ${response.status}: ${response.statusText}`;
+    try {
+      const body = await response.json() as { error?: string };
+      if (body.error) {
+        message = body.error;
+      }
+    } catch {
+      // Keep the HTTP status message when the response body is not JSON.
+    }
+    throw new Error(message);
   }
 
   return response.json();
@@ -63,6 +72,12 @@ export async function bulkImportVinyls(items: BulkImportItem[]): Promise<void> {
     method: 'POST',
     body: JSON.stringify({ items }),
   });
+}
+
+export async function searchArtistAlbums(artist: string): Promise<AlbumCandidate[]> {
+  return fetchJSON<AlbumCandidate[]>(
+    `${BASE_URL}/admin/albums/search?artist=${encodeURIComponent(artist)}`,
+  );
 }
 
 export async function createVinylFromCandidate(candidate: AlbumCandidate): Promise<Vinyl> {

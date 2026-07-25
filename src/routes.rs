@@ -1,11 +1,14 @@
 //! Application routes
 
 use axum::{
-    extract::DefaultBodyLimit,
+    extract::{DefaultBodyLimit, Request},
+    middleware::{self, Next},
+    response::Response,
     routing::{delete, get, post, put},
     Router,
 };
 use sqlx::SqlitePool;
+use std::time::Instant;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_sessions::{Expiry, SessionManagerLayer};
 use tower_sessions_sqlx_store::SqliteStore;
@@ -62,6 +65,10 @@ pub async fn create_router(
         .route("/auth/me", get(handlers::auth::me))
         .route("/admin/vinyls", post(handlers::admin::create_vinyl))
         .route(
+            "/admin/albums/search",
+            get(handlers::admin::search_artist_albums),
+        )
+        .route(
             "/admin/vinyls/import-cover",
             post(handlers::admin::import_cover_image),
         )
@@ -100,8 +107,24 @@ pub async fn create_router(
         );
     }
 
-    // Add session layer
-    app = app.layer(session_layer);
+    // Add session layer and request logging.
+    app = app.layer(session_layer).layer(middleware::from_fn(log_request));
 
     Ok(app)
+}
+
+async fn log_request(request: Request, next: Next) -> Response {
+    let method = request.method().clone();
+    let uri = request.uri().clone();
+    let started_at = Instant::now();
+
+    tracing::info!(%method, %uri, "request received");
+
+    let response = next.run(request).await;
+    let status = response.status();
+    let elapsed_ms = started_at.elapsed().as_millis();
+
+    tracing::info!(%method, %uri, %status, elapsed_ms, "request completed");
+
+    response
 }

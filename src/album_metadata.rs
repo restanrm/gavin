@@ -11,6 +11,7 @@ use chrono::Utc;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
+use unicode_normalization::UnicodeNormalization;
 
 use crate::{
     config::Config,
@@ -412,6 +413,46 @@ impl AlbumMetadataClient {
         unreachable!("Gemini request retry loop should return or bail")
     }
 
+    /// Search MusicBrainz for albums by artist so admins can add one or more
+    /// albums without typing each title manually.
+    pub async fn search_artist_albums(&self, artist: &str) -> anyhow::Result<Vec<AlbumCandidate>> {
+        if !self.enabled {
+            anyhow::bail!("Album metadata lookup is disabled");
+        }
+
+        let artist = artist.trim();
+        if artist.is_empty() {
+            anyhow::bail!("Artist name is required");
+        }
+
+        let query = format!("artist:\"{}\"", escape_lucene_phrase(artist));
+        let mut candidates = self.search_musicbrainz_query(&query, 50).await?;
+        candidates.retain(|candidate| {
+            candidate.score.unwrap_or(0) >= 70
+                && normalize(&candidate.artist).contains(&normalize(artist))
+        });
+
+        candidates.sort_by(|left, right| {
+            right
+                .score
+                .unwrap_or(0)
+                .cmp(&left.score.unwrap_or(0))
+                .then_with(|| left.release_year.cmp(&right.release_year))
+                .then_with(|| left.title.cmp(&right.title))
+        });
+        candidates.truncate(30);
+
+        for candidate in &mut candidates {
+            candidate.cover_image_url = self
+                .fetch_cover_url(&candidate.id)
+                .await
+                .ok()
+                .flatten();
+        }
+
+        Ok(candidates)
+    }
+
     async fn lookup_from_reverse_image_terms(
         &self,
         terms: &[String],
@@ -798,7 +839,7 @@ fn recognition_terms(provider: &str, raw_terms: Vec<String>) -> anyhow::Result<V
 
 fn normalize(value: &str) -> String {
     value
-        .chars()
+        .nfkd()
         .filter(|character| character.is_ascii_alphanumeric())
         .flat_map(|character| character.to_lowercase())
         .collect()
@@ -1124,8 +1165,12 @@ fn cover_candidate_relevance(candidate: &AlbumCandidate, terms: &[String]) -> i3
             .filter(|token| term_tokens.contains(token))
             .count() as i32;
 
-        relevance += (title_overlap * 25).min(80);
-        relevance += (artist_overlap * 20).min(60);
+        if title_overlap >= 2 {
+            relevance += (title_overlap * 25).min(80);
+        }
+        if artist_overlap >= 2 {
+            relevance += (artist_overlap * 20).min(60);
+        }
     }
 
     relevance
@@ -1162,7 +1207,8 @@ mod tests {
     #[test]
     fn normalizes_for_matching() {
         assert_eq!(normalize("The Dark Side of the Moon"), "thedarksideofthemoon");
-        assert_eq!(normalize("Björk - Debut!"), "bjrkdebut");
+        assert_eq!(normalize("Björk - Debut!"), "bjorkdebut");
+        assert_eq!(normalize("Gaël Faye"), normalize("Gael Faye"));
     }
 
     #[test]

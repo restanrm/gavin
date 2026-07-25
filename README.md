@@ -167,6 +167,7 @@ The frontend expects the following API endpoints:
 - `POST /api/admin/vinyls` - Create vinyl record
 - `PUT /api/admin/vinyls/:id` - Update vinyl record
 - `DELETE /api/admin/vinyls/:id` - Delete vinyl record
+- `GET /api/admin/albums/search?artist=` - Search MusicBrainz albums by artist for manual selection
 - `POST /api/admin/vinyls/bulk` - Bulk import vinyls
 - `POST /api/admin/vinyls/import-cover` - Import a vinyl by uploading an album-cover photo (multipart/form-data)
 - `POST /api/admin/vinyls/import-cover-candidate` - Import a selected MusicBrainz candidate from cover-photo matching

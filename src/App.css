@@ -172,7 +172,8 @@
 /* Forms */
 .vinyl-form h3,
 .bulk-import h3,
-.cover-import h3 {
+.cover-import h3,
+.artist-album-import h3 {
   font-size: 1.25rem;
   margin-bottom: var(--spacing-lg);
   color: var(--color-text);
@@ -227,6 +228,72 @@
   margin-top: var(--spacing-sm);
   font-size: 0.875rem;
   color: var(--color-text-muted);
+}
+
+.success-message {
+  padding: var(--spacing-md);
+  margin: var(--spacing-lg) 0;
+  color: var(--color-success);
+  background-color: var(--color-bg-alt);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-md);
+}
+
+.artist-album-results {
+  margin-top: var(--spacing-lg);
+}
+
+.results-count {
+  margin-bottom: var(--spacing-md);
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.album-result-list {
+  display: grid;
+  gap: var(--spacing-md);
+  list-style: none;
+}
+
+.album-result {
+  display: grid;
+  grid-template-columns: 72px 1fr auto;
+  gap: var(--spacing-md);
+  align-items: center;
+  padding: var(--spacing-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-alt);
+}
+
+.album-result-added {
+  border-color: var(--color-success);
+}
+
+.album-result img,
+.album-result-placeholder {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+}
+
+.album-result-info span,
+.album-result-info small {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+@media (max-width: 640px) {
+  .album-result {
+    grid-template-columns: 64px 1fr;
+  }
+
+  .album-result .btn {
+    grid-column: 1 / -1;
+  }
 }
 
 .cover-import-result {
