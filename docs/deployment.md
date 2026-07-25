@@ -16,6 +16,10 @@ The default public domain is `gavin.restanrm.fr`. Override `PUBLIC_DOMAIN` or He
 
 ## Container Deployment (Podman)
 
+### CI Build
+
+GitHub Actions builds the container image on pushes to `main`, pull requests, and manual `workflow_dispatch` runs using `.github/workflows/container.yml`. The workflow only validates the Docker build; it does not push images to a registry.
+
 ### Building the Image
 
 Build the production-ready container image with Podman:
