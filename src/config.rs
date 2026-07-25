@@ -47,8 +47,33 @@ pub struct Config {
     pub cookie_secure: bool,
     pub album_metadata_enabled: bool,
     pub album_metadata_user_agent: Option<String>,
+    pub album_cover_recognition_provider: String,
+    pub openai_api_key: Option<String>,
+    pub openai_base_url: String,
+    pub openai_model: String,
+    pub gemini_api_key: Option<String>,
+    pub gemini_base_url: String,
+    pub gemini_model: String,
     pub musicbrainz_base_url: String,
     pub cover_art_archive_base_url: String,
+}
+
+fn optional_env(key: &str) -> Option<String> {
+    env::var(key).ok().filter(|value| !value.trim().is_empty())
+}
+
+fn album_cover_recognition_provider() -> String {
+    env::var("ALBUM_COVER_RECOGNITION_PROVIDER")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| {
+            if optional_env("GEMINI_API_KEY").is_some() {
+                "gemini".to_string()
+            } else {
+                "openai".to_string()
+            }
+        })
+        .to_lowercase()
 }
 
 impl Config {
@@ -117,6 +142,17 @@ impl Config {
                 .parse()
                 .unwrap_or(true),
             album_metadata_user_agent: env::var("ALBUM_METADATA_USER_AGENT").ok(),
+            album_cover_recognition_provider: album_cover_recognition_provider(),
+            openai_api_key: optional_env("OPENAI_API_KEY"),
+            openai_base_url: env::var("OPENAI_BASE_URL")
+                .unwrap_or_else(|_| "https://api.openai.com".to_string()),
+            openai_model: env::var("OPENAI_ALBUM_COVER_MODEL")
+                .unwrap_or_else(|_| "gpt-4o-mini".to_string()),
+            gemini_api_key: optional_env("GEMINI_API_KEY"),
+            gemini_base_url: env::var("GEMINI_BASE_URL")
+                .unwrap_or_else(|_| "https://generativelanguage.googleapis.com".to_string()),
+            gemini_model: env::var("GEMINI_ALBUM_COVER_MODEL")
+                .unwrap_or_else(|_| "gemini-2.0-flash".to_string()),
             musicbrainz_base_url: env::var("MUSICBRAINZ_BASE_URL")
                 .unwrap_or_else(|_| "https://musicbrainz.org".to_string()),
             cover_art_archive_base_url: env::var("COVER_ART_ARCHIVE_BASE_URL")

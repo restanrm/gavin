@@ -133,6 +133,12 @@ config:
   albumMetadataEnabled: "true"
   # Optional; set to identify your deployment to MusicBrainz.
   albumMetadataUserAgent: ""
+  # Album-cover visual recognition provider: gemini, openai, or disabled.
+  albumCoverRecognitionProvider: "gemini"
+  geminiBaseUrl: "https://generativelanguage.googleapis.com"
+  geminiAlbumCoverModel: "gemini-2.0-flash"
+  openaiBaseUrl: "https://api.openai.com"
+  openaiAlbumCoverModel: "gpt-4o-mini"
   musicbrainzBaseUrl: "https://musicbrainz.org"
   coverArtArchiveBaseUrl: "https://coverartarchive.org"
 
@@ -152,6 +158,10 @@ secrets:
   oidcRedirectUrl: ""
   # Session secret (minimum 64 characters)
   sessionSecret: ""
+  # Required when albumCoverRecognitionProvider is gemini.
+  geminiApiKey: ""
+  # Required when albumCoverRecognitionProvider is openai.
+  openaiApiKey: ""
 
 # Additional volumes to mount
 extraVolumes: []

@@ -26,6 +26,26 @@ export interface UploadResponse {
   url: string;
 }
 
+export interface AlbumCandidate {
+  source: string;
+  id: string;
+  title: string;
+  artist: string;
+  release_year?: number;
+  cover_image_url?: string;
+  disambiguation?: string;
+  source_url: string;
+  score?: number;
+}
+
+export interface CoverImportResponse {
+  status: 'complete' | 'needs_choice' | 'not_found' | 'error';
+  detected_terms: string[];
+  candidates: AlbumCandidate[];
+  vinyl?: Vinyl;
+  error?: string;
+}
+
 export interface BulkImportItem {
   artist: string;
   title: string;

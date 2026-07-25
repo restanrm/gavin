@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { createVinyl } from '../utils/api';
-import { ImageUpload } from './ImageUpload';
 
 interface VinylFormProps {
   onSuccess: () => void;
@@ -54,9 +53,9 @@ export function VinylForm({ onSuccess }: VinylFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="vinyl-form">
-      <h3>Add New Vinyl</h3>
+      <h3>Add Manually</h3>
       <p className="help-text">
-        Album metadata is fetched online after submit and saved with the record.
+        Use this form when you already know the artist and album title. To detect those automatically from an image, use <strong>Import from Album Cover</strong>.
       </p>
 
       {error && (
@@ -127,22 +126,23 @@ export function VinylForm({ onSuccess }: VinylFormProps) {
         />
       </div>
 
-      <div className="form-group">
-        <label htmlFor="cover-url" className="form-label">
-          Cover Image URL
-        </label>
-        <input
-          id="cover-url"
-          type="url"
-          value={coverImageUrl}
-          onChange={(e) => setCoverImageUrl(e.target.value)}
-          disabled={submitting}
-          className="form-input"
-          placeholder="https://example.com/cover.jpg"
-        />
-      </div>
-
-      <ImageUpload onUploadComplete={setCoverImageUrl} />
+      <details className="manual-cover-details">
+        <summary>Optional manual cover URL</summary>
+        <div className="form-group">
+          <label htmlFor="cover-url" className="form-label">
+            Cover Image URL
+          </label>
+          <input
+            id="cover-url"
+            type="url"
+            value={coverImageUrl}
+            onChange={(e) => setCoverImageUrl(e.target.value)}
+            disabled={submitting}
+            className="form-input"
+            placeholder="https://example.com/cover.jpg"
+          />
+        </div>
+      </details>
 
       <button
         type="submit"

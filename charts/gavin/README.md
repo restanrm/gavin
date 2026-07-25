@@ -109,6 +109,11 @@ The following table lists the configurable parameters and their default values.
 | `config.cookieSecure` | Secure cookies | `true` |
 | `config.albumMetadataEnabled` | Enable MusicBrainz/Cover Art Archive metadata enrichment | `true` |
 | `config.albumMetadataUserAgent` | Optional metadata lookup user agent | `""` |
+| `config.albumCoverRecognitionProvider` | Cover recognition provider (`gemini`, `openai`, or `disabled`) | `gemini` |
+| `config.geminiBaseUrl` | Gemini API base URL for cover recognition | `https://generativelanguage.googleapis.com` |
+| `config.geminiAlbumCoverModel` | Gemini vision model used for album-cover recognition | `gemini-2.0-flash` |
+| `config.openaiBaseUrl` | OpenAI-compatible API base URL for ChatGPT cover recognition | `https://api.openai.com` |
+| `config.openaiAlbumCoverModel` | ChatGPT vision model used for album-cover recognition | `gpt-4o-mini` |
 | `config.musicbrainzBaseUrl` | MusicBrainz base URL | `https://musicbrainz.org` |
 | `config.coverArtArchiveBaseUrl` | Cover Art Archive base URL | `https://coverartarchive.org` |
 
@@ -122,6 +127,8 @@ The following table lists the configurable parameters and their default values.
 | `secrets.oidcClientSecret` | OIDC client secret | `""` |
 | `secrets.oidcRedirectUrl` | OIDC redirect URL (empty generates `https://<domain>/api/auth/callback`) | `""` |
 | `secrets.sessionSecret` | Session secret (64+ chars) | `""` |
+| `secrets.geminiApiKey` | Gemini API key for album-cover recognition | `""` |
+| `secrets.openaiApiKey` | OpenAI API key for ChatGPT album-cover recognition | `""` |
 
 ### Resources
 

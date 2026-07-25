@@ -1,4 +1,4 @@
-import type { Vinyl, User, UploadResponse, BulkImportItem } from '../types';
+import type { Vinyl, User, UploadResponse, BulkImportItem, AlbumCandidate, CoverImportResponse } from '../types';
 
 type VinylInput = Pick<Vinyl, 'artist' | 'title' | 'release_year' | 'notes' | 'cover_image_url'>;
 
@@ -63,6 +63,29 @@ export async function bulkImportVinyls(items: BulkImportItem[]): Promise<void> {
     method: 'POST',
     body: JSON.stringify({ items }),
   });
+}
+
+export async function createVinylFromCandidate(candidate: AlbumCandidate): Promise<Vinyl> {
+  return fetchJSON<Vinyl>(`${BASE_URL}/admin/vinyls/import-cover-candidate`, {
+    method: 'POST',
+    body: JSON.stringify({ candidate }),
+  });
+}
+
+export async function importCoverImage(file: File): Promise<CoverImportResponse> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${BASE_URL}/admin/vinyls/import-cover`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Cover import failed: ${response.statusText}`);
+  }
+
+  return response.json();
 }
 
 export async function uploadImage(file: File): Promise<UploadResponse> {

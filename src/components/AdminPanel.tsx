@@ -1,5 +1,6 @@
 import { VinylForm } from './VinylForm';
 import { BulkImport } from './BulkImport';
+import { CoverImport } from './CoverImport';
 
 interface AdminPanelProps {
   onVinylsUpdate: () => void;
@@ -11,6 +12,10 @@ export function AdminPanel({ onVinylsUpdate }: AdminPanelProps) {
       <h2>Admin Controls</h2>
 
       <div className="admin-sections">
+        <section className="admin-section admin-section-featured">
+          <CoverImport onSuccess={onVinylsUpdate} />
+        </section>
+
         <section className="admin-section">
           <VinylForm onSuccess={onVinylsUpdate} />
         </section>

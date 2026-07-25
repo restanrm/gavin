@@ -1,6 +1,7 @@
 //! Application routes
 
 use axum::{
+    extract::DefaultBodyLimit,
     routing::{delete, get, post, put},
     Router,
 };
@@ -60,6 +61,14 @@ pub async fn create_router(
         .route("/auth/logout", post(handlers::auth::logout))
         .route("/auth/me", get(handlers::auth::me))
         .route("/admin/vinyls", post(handlers::admin::create_vinyl))
+        .route(
+            "/admin/vinyls/import-cover",
+            post(handlers::admin::import_cover_image),
+        )
+        .route(
+            "/admin/vinyls/import-cover-candidate",
+            post(handlers::admin::import_cover_candidate),
+        )
         .route("/admin/vinyls/:id", put(handlers::admin::update_vinyl))
         .route("/admin/vinyls/:id", delete(handlers::admin::delete_vinyl))
         .route(
@@ -67,6 +76,9 @@ pub async fn create_router(
             post(handlers::admin::bulk_create_vinyls),
         )
         .route("/admin/uploads", post(handlers::admin::upload_file))
+        // Let handlers validate image sizes and return friendly errors instead
+        // of failing multipart parsing at Axum's default 2MB body limit.
+        .layer(DefaultBodyLimit::max(25 * 1024 * 1024))
         .with_state(state);
 
     // Main router

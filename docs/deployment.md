@@ -393,6 +393,13 @@ git commit -m "Add sealed secrets for gavin"
 | `COOKIE_SECURE` | No | `true` | Use secure cookies (HTTPS only) |
 | `ALBUM_METADATA_ENABLED` | No | `true` | Enable MusicBrainz/Cover Art Archive enrichment when albums are added |
 | `ALBUM_METADATA_USER_AGENT` | No | generated | User agent for MusicBrainz requests; set this to identify your deployment |
+| `ALBUM_COVER_RECOGNITION_PROVIDER` | No | auto | Album-cover visual recognition provider: `gemini`, `openai`, or `disabled` |
+| `GEMINI_API_KEY` | Required when provider is `gemini` | - | Gemini API key for album-cover recognition |
+| `GEMINI_BASE_URL` | No | `https://generativelanguage.googleapis.com` | Gemini API base URL |
+| `GEMINI_ALBUM_COVER_MODEL` | No | `gemini-2.0-flash` | Gemini vision model used for album-cover recognition |
+| `OPENAI_API_KEY` | Required when provider is `openai` | - | OpenAI API key for ChatGPT album-cover recognition |
+| `OPENAI_BASE_URL` | No | `https://api.openai.com` | OpenAI-compatible API base URL |
+| `OPENAI_ALBUM_COVER_MODEL` | No | `gpt-4o-mini` | ChatGPT vision model used for album-cover recognition |
 | `MUSICBRAINZ_BASE_URL` | No | `https://musicbrainz.org` | MusicBrainz API base URL |
 | `COVER_ART_ARCHIVE_BASE_URL` | No | `https://coverartarchive.org` | Cover Art Archive base URL |
 | `RUST_LOG` | No | `info,gavin=info` | Log level configuration |

@@ -18,5 +18,10 @@ data:
   {{- with .Values.config.albumMetadataUserAgent }}
   ALBUM_METADATA_USER_AGENT: {{ . | quote }}
   {{- end }}
+  ALBUM_COVER_RECOGNITION_PROVIDER: {{ .Values.config.albumCoverRecognitionProvider | quote }}
+  GEMINI_BASE_URL: {{ .Values.config.geminiBaseUrl | quote }}
+  GEMINI_ALBUM_COVER_MODEL: {{ .Values.config.geminiAlbumCoverModel | quote }}
+  OPENAI_BASE_URL: {{ .Values.config.openaiBaseUrl | quote }}
+  OPENAI_ALBUM_COVER_MODEL: {{ .Values.config.openaiAlbumCoverModel | quote }}
   MUSICBRAINZ_BASE_URL: {{ .Values.config.musicbrainzBaseUrl | quote }}
   COVER_ART_ARCHIVE_BASE_URL: {{ .Values.config.coverArtArchiveBaseUrl | quote }}

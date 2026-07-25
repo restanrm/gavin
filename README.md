@@ -168,6 +168,8 @@ The frontend expects the following API endpoints:
 - `PUT /api/admin/vinyls/:id` - Update vinyl record
 - `DELETE /api/admin/vinyls/:id` - Delete vinyl record
 - `POST /api/admin/vinyls/bulk` - Bulk import vinyls
+- `POST /api/admin/vinyls/import-cover` - Import a vinyl by uploading an album-cover photo (multipart/form-data)
+- `POST /api/admin/vinyls/import-cover-candidate` - Import a selected MusicBrainz candidate from cover-photo matching
 - `POST /api/admin/uploads` - Upload cover image (multipart/form-data)
 
 ### Data Types
@@ -256,6 +258,22 @@ Pink Floyd,The Dark Side of the Moon,1973
 Miles Davis,Kind of Blue,1959,Essential jazz album
 ```
 
+## Album Cover Photo Import
+
+Admins can import a vinyl from a photo of the album cover. Gavin asks the configured vision provider to identify the cover image, resolves the detected album terms against MusicBrainz, and stores the clean official Cover Art Archive URL for the matched album instead of storing the uploaded photo.
+
+MusicBrainz and Cover Art Archive are still used for free/open metadata and artwork. A freely available non-AI reverse-cover search API is not currently configured, so visual identification can use Gemini (`ALBUM_COVER_RECOGNITION_PROVIDER=gemini`) or ChatGPT/OpenAI (`ALBUM_COVER_RECOGNITION_PROVIDER=openai`). Because visual recognition can be wrong, Gavin always shows the uploaded cover next to candidate jackets and asks the admin to click the matching jacket before importing.
+
+If imports fail with `429 Too Many Requests`, check the configured provider's free-tier/API limits. Gavin retries transient 429s, but quota exhaustion must be fixed in the provider account or by using another key/provider.
+
+If Gemini returns a `404 Not Found` for the configured model, list the models available to your API key and choose one that supports `generateContent`:
+
+```bash
+curl "https://generativelanguage.googleapis.com/v1beta/models?key=$GEMINI_API_KEY"
+```
+
+Use the returned model name without or with the `models/` prefix, for example `GEMINI_ALBUM_COVER_MODEL=gemini-2.0-flash`.
+
 ## Mobile/PWA Support
 
 The frontend includes a web app manifest, mobile icons, theme metadata, and a service worker. After serving the production build over HTTPS, mobile users can install Gavin from the browser menu ("Add to Home Screen" on iOS/Android). The service worker caches the application shell and static assets; API data still comes from the backend.
@@ -291,11 +309,19 @@ Key configuration options:
 - `HOST` / `PORT` - Server bind address (default: `0.0.0.0:3000`)
 - `ALBUM_METADATA_ENABLED` - Enable internet album metadata enrichment (default: `true`)
 - `ALBUM_METADATA_USER_AGENT` - Optional MusicBrainz user agent; recommended for public deployments
+- `ALBUM_COVER_RECOGNITION_PROVIDER` - Album-cover visual recognition provider: `gemini`, `openai`, or `disabled` (defaults to `gemini` when `GEMINI_API_KEY` is set, otherwise `openai`)
+- `GEMINI_API_KEY` - Gemini API key for album-cover recognition (Google AI Studio free tier)
+- `GEMINI_BASE_URL` - Gemini API base URL (default: `https://generativelanguage.googleapis.com`)
+- `GEMINI_ALBUM_COVER_MODEL` - Gemini vision model used for album-cover recognition (default: `gemini-2.0-flash`)
+- `OPENAI_API_KEY` - OpenAI API key required when using `ALBUM_COVER_RECOGNITION_PROVIDER=openai`
+- `OPENAI_BASE_URL` - OpenAI-compatible API base URL (default: `https://api.openai.com`)
+- `OPENAI_ALBUM_COVER_MODEL` - ChatGPT vision model used for album-cover recognition (default: `gpt-4o-mini`)
 - `MUSICBRAINZ_BASE_URL` - MusicBrainz API base URL (default: `https://musicbrainz.org`)
 - `COVER_ART_ARCHIVE_BASE_URL` - Cover Art Archive API base URL (default: `https://coverartarchive.org`)
 
 **Album Metadata Enrichment**:
 - Creating a vinyl (single or bulk) performs a best-effort lookup via MusicBrainz and stores release year, cover art URL, source URL, and lookup status in SQLite.
+- Cover-photo imports use the configured visual recognition provider to find MusicBrainz candidates, then store the official Cover Art Archive image URL for the imported album.
 - If multiple plausible album matches exist, Gavin marks the record as `needs_choice` and stores candidate choices instead of guessing.
 - On startup, Gavin launches an asynchronous background check that retries rows with pending, failed, or missing metadata lookups.
 
