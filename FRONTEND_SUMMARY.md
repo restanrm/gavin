@@ -9,7 +9,7 @@ Complete React + TypeScript + Vite frontend for the Gavin Vinyl Library project.
 - **React 18** - Modern functional components with hooks
 - **TypeScript 5.3** - Strict mode enabled for type safety
 - **Vite 5** - Fast build tool and dev server
-- **Vitest** - Testing framework (25 tests, all passing)
+- **Vitest** - Testing framework for component and utility coverage
 - **Testing Library** - Component testing utilities
 
 ### Key Features Implemented
@@ -42,10 +42,10 @@ Complete React + TypeScript + Vite frontend for the Gavin Vinyl Library project.
 ✅ Responsive grid (auto-fill, minmax)
 ✅ Touch-friendly tap targets
 ✅ Breakpoints: 640px, 1024px
-✅ Dark mode support (prefers-color-scheme)
+✅ Light/dark/system theme selector with saved preferences
 ✅ PWA support (manifest, service worker, mobile icons, install metadata)
 
-### File Structure (31 files, ~1140 lines)
+### File Structure
 
 ```
 gavin-vinyl-library/
@@ -68,11 +68,12 @@ gavin-vinyl-library/
 │   │   ├── App.css            - Application styles
 │   │   ├── index.css          - Global styles & CSS variables
 │   │   │
-│   │   ├── components/        - React components (8 files)
+│   │   ├── components/        - React components
 │   │   │   ├── VinylCard.tsx
 │   │   │   ├── VinylCatalog.tsx
 │   │   │   ├── SearchBar.tsx
 │   │   │   ├── LoginButton.tsx
+│   │   │   ├── ThemeToggle.tsx
 │   │   │   ├── AdminPanel.tsx
 │   │   │   ├── VinylForm.tsx
 │   │   │   ├── BulkImport.tsx
@@ -81,6 +82,7 @@ gavin-vinyl-library/
 │   │   ├── hooks/             - Custom React hooks
 │   │   │   ├── useAuth.ts
 │   │   │   ├── useVinyls.ts
+│   │   │   ├── useTheme.ts
 │   │   │   └── useDebounce.ts
 │   │   │
 │   │   ├── utils/             - Utility functions
@@ -93,11 +95,12 @@ gavin-vinyl-library/
 │   │   └── test/              - Test setup
 │   │       └── setup.ts       - Vitest configuration
 │   │
-│   └── tests/                 - Test files (4 files)
-│       ├── csv.test.ts        - 12 tests for CSV parsing
-│       ├── useDebounce.test.ts - 3 tests for debounce hook
-│       ├── SearchBar.test.tsx  - 4 tests for search component
-│       └── VinylCard.test.tsx  - 6 tests for vinyl card
+│   └── tests/                 - Test files
+│       ├── csv.test.ts        - tests for CSV parsing
+│       ├── useDebounce.test.ts - tests for debounce hook
+│       ├── SearchBar.test.tsx  - tests for search component
+│       ├── ThemeToggle.test.tsx - tests for theme selection
+│       └── VinylCard.test.tsx  - tests for vinyl card
 │
 └── Documentation
     └── README.md              - Comprehensive documentation
@@ -138,11 +141,12 @@ Pink Floyd,The Dark Side of the Moon,1973
 
 **Test Results:**
 ```
-✓ 25 tests passing
-  - 12 CSV parser tests (validation, edge cases)
-  - 3 debounce hook tests (timing, rapid changes)
-  - 4 search bar tests (accessibility, interaction)
-  - 6 vinyl card tests (rendering, admin mode)
+✓ Vitest component and utility tests
+  - CSV parser tests (validation, edge cases)
+  - debounce hook tests (timing, rapid changes)
+  - search bar tests (accessibility, interaction)
+  - theme toggle tests (saved theme selection)
+  - vinyl card tests (rendering, admin mode)
 ```
 
 **Type Safety:**

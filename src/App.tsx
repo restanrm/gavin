@@ -3,6 +3,7 @@ import { useAuth } from './hooks/useAuth';
 import { useVinyls } from './hooks/useVinyls';
 import { useDebounce } from './hooks/useDebounce';
 import { LoginButton } from './components/LoginButton';
+import { ThemeToggle } from './components/ThemeToggle';
 import { SearchBar } from './components/SearchBar';
 import { VinylCatalog } from './components/VinylCatalog';
 import { AdminPanel } from './components/AdminPanel';
@@ -32,13 +33,16 @@ function App() {
             <img src="/logo.svg" alt="" className="brand-logo" />
             <h1>Gavin Vinyl Library</h1>
           </div>
-          {!authLoading && (
-            <LoginButton
-              isAuthenticated={isAuthenticated}
-              userName={user?.name || user?.email}
-              onLogoutComplete={handleLogoutComplete}
-            />
-          )}
+          <div className="header-actions">
+            <ThemeToggle />
+            {!authLoading && (
+              <LoginButton
+                isAuthenticated={isAuthenticated}
+                userName={user?.name || user?.email}
+                onLogoutComplete={handleLogoutComplete}
+              />
+            )}
+          </div>
         </div>
       </header>
 

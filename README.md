@@ -14,7 +14,7 @@ A Rust + React web application for browsing and managing a family vinyl record l
   - Delete records
 - **Responsive Design**: Works seamlessly on mobile, tablet, and desktop
 - **Accessible**: WCAG 2.1 AA compliant with keyboard navigation support
-- **Dark Mode**: Automatic dark mode based on system preferences
+- **Dark Mode**: Light, dark, and system theme options with saved preferences
 - **Installable PWA**: Add to a mobile home screen with offline shell caching
 
 ## Prerequisites
