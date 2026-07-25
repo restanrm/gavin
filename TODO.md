@@ -1,2 +1,1 @@
-- progressive web app view for mobile with at least 2 albums per line.
 - infinite scroll with seemless page load. filtering should be done server side to ensure that we have all matches
