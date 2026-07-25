@@ -2,8 +2,9 @@
 # Override these values with your production configuration
 
 image:
-  repository: your-registry.io/gavin
-  tag: "0.1.0"
+  repository: ghcr.io/restanrm/gavin
+  # Empty tag uses Chart.appVersion (for example, v0.2.0).
+  tag: ""
   pullPolicy: IfNotPresent
 
 # SQLite is intentionally used for this app; keep one writer replica.

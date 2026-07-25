@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Automated GitHub release workflow** that prepares version files, validates builds/tests/Helm chart, tags releases, publishes GHCR images, and creates GitHub releases from changelog notes.
+- **Automated GitHub release workflow** that prepares version files, validates builds/tests/Helm chart, tags releases, publishes GHCR container images and Helm charts, and creates GitHub releases from changelog notes.
 - **Local release preparation helpers** via `scripts/prepare-release.sh`, `scripts/extract-release-notes.sh`, and `mise run release:prepare` / `mise run release:notes`.
 - **Internet album metadata enrichment** using MusicBrainz and Cover Art Archive when admins add vinyls individually or in bulk.
 - **Metadata choice marking** for bulk-imported albums with multiple plausible MusicBrainz matches (`metadata_status=needs_choice`).
@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SESSION_SECRET` is optional in dev mode (required for OIDC mode)
 - `AuthClient` enum introduced to support both OIDC and dev authentication modes
 - Backend now logs authentication mode on startup for clarity
+- Helm defaults now pull `ghcr.io/restanrm/gavin:<appVersion>`, currently `ghcr.io/restanrm/gavin:v0.2.0`.
 - Production Helm values now keep a single replica by default because SQLite is the intended database for this app.
 - Container documentation now prefers Podman while keeping OCI/Docker compatibility notes.
 

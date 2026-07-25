@@ -10,7 +10,7 @@ replicaCount: 1
 domain: gavin.restanrm.fr
 
 image:
-  repository: gavin
+  repository: ghcr.io/restanrm/gavin
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""

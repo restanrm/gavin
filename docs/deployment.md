@@ -18,7 +18,7 @@ The default public domain is `gavin.restanrm.fr`. Override `PUBLIC_DOMAIN` or He
 
 ### CI Build
 
-GitHub Actions builds the container image on pushes to `main`, pull requests, and manual `workflow_dispatch` runs using `.github/workflows/container.yml`. The workflow only validates the Docker build; it does not push images to a registry.
+GitHub Actions builds the container image on pushes to `main`, pull requests, and manual `workflow_dispatch` runs using `.github/workflows/container.yml`. The workflow only validates the Docker build; it does not push images to a registry. Release publishing is handled by `.github/workflows/release.yml`, which pushes both the container image and Helm chart to GHCR.
 
 ### Building the Image
 
@@ -31,7 +31,7 @@ podman build -t gavin:latest .
 For a specific version:
 
 ```bash
-podman build -t gavin:0.1.0 .
+podman build -t gavin:v0.2.0 .
 ```
 
 Docker users can replace `podman` with `docker`; the image file is OCI-compatible.
@@ -165,8 +165,6 @@ kubectl create secret generic gavin-secrets \
 ```bash
 helm install gavin ./charts/gavin \
   --namespace gavin \
-  --set image.repository=your-registry.io/gavin \
-  --set image.tag=0.1.0 \
   --set existingSecret=gavin-secrets
 ```
 
@@ -221,11 +219,11 @@ kubectl exec -n gavin deployment/gavin -- wget -qO- http://localhost:3000/api/he
 ### Upgrade
 
 ```bash
-# Upgrade to new version
-helm upgrade gavin ./charts/gavin \
+# Upgrade to new version from the published GHCR chart
+helm upgrade gavin oci://ghcr.io/restanrm/charts/gavin \
+  --version 0.2.0 \
   --namespace gavin \
-  --values my-values.yaml \
-  --set image.tag=0.2.0
+  --values my-values.yaml
 
 # Rollback if needed
 helm rollback gavin -n gavin
@@ -269,8 +267,6 @@ spec:
       valueFiles:
         - values-prod.yaml
       parameters:
-        - name: image.tag
-          value: "0.1.0"
         - name: existingSecret
           value: gavin-secrets
   
@@ -491,7 +487,7 @@ Expected response:
 
 **Check image exists:**
 ```bash
-podman pull your-registry.io/gavin:0.1.0
+podman pull ghcr.io/restanrm/gavin:v0.2.0
 ```
 
 **Check imagePullSecrets:**

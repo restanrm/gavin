@@ -103,7 +103,7 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64
           push: false
-          tags: gavin:${{ steps.release_input.outputs.version }}
+          tags: gavin:${{ steps.release_input.outputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -155,6 +155,18 @@ jobs:
           tags: ${{ steps.image_tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Package and push Helm chart to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "$GH_TOKEN" | helm registry login "$REGISTRY" --username "${{ github.actor }}" --password-stdin
+          mkdir -p /tmp/helm-packages
+          helm package charts/gavin --destination /tmp/helm-packages
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          helm push "/tmp/helm-packages/gavin-${{ steps.release_input.outputs.version }}.tgz" "oci://${REGISTRY}/${owner}/charts"
 
       - name: Create GitHub release
         env:

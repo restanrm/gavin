@@ -16,7 +16,7 @@ Gavin uses SQLite by design. Keep `replicaCount: 1` unless the database layer ch
 ### Basic Installation
 
 ```bash
-# Add your custom values
+# Add your custom values. By default the chart pulls ghcr.io/restanrm/gavin:<appVersion>.
 helm install gavin ./charts/gavin \
   --set secrets.oidcIssuerUrl=https://your-oidc-provider.com \
   --set secrets.oidcClientId=your-client-id \
@@ -65,9 +65,9 @@ The following table lists the configurable parameters and their default values.
 |-----------|-------------|---------|
 | `replicaCount` | Number of replicas. Keep `1` with SQLite. | `1` |
 | `domain` | Default public domain used for ingress/callback examples | `gavin.restanrm.fr` |
-| `image.repository` | Image repository | `gavin` |
+| `image.repository` | Image repository | `ghcr.io/restanrm/gavin` |
 | `image.pullPolicy` | Image pull policy | `IfNotPresent` |
-| `image.tag` | Image tag (defaults to chart appVersion) | `""` |
+| `image.tag` | Image tag (defaults to chart appVersion, e.g. `v0.2.0`) | `""` |
 
 ### Service Parameters
 
@@ -139,10 +139,20 @@ The following table lists the configurable parameters and their default values.
 | `resources.requests.cpu` | CPU request | `100m` |
 | `resources.requests.memory` | Memory request | `256Mi` |
 
+## Installing from GHCR
+
+Release workflows publish the chart as an OCI artifact in GHCR:
+
+```bash
+helm install gavin oci://ghcr.io/restanrm/charts/gavin --version 0.2.0 -f your-values.yaml
+```
+
 ## Upgrading
 
 ```bash
 helm upgrade gavin ./charts/gavin -f your-values.yaml
+# or, for a published chart:
+helm upgrade gavin oci://ghcr.io/restanrm/charts/gavin --version 0.2.0 -f your-values.yaml
 ```
 
 ## Uninstalling

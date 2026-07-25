@@ -161,7 +161,7 @@ cargo clippy
 ## Releases
 
 Releases are automated by the manually triggered GitHub Actions workflow at `.github/workflows/release.yml`.
-Run it from GitHub with a semantic version such as `0.2.0`. The workflow prepares version files, runs tests/builds, validates the Helm chart, creates a release commit and `vX.Y.Z` tag, pushes the container image to GHCR, and creates the GitHub release from `CHANGELOG.md` notes.
+Run it from GitHub with a semantic version such as `0.2.0`. The workflow prepares version files, runs tests/builds, validates the Helm chart, creates a release commit and `vX.Y.Z` tag, pushes the container image and Helm chart to GHCR, and creates the GitHub release from `CHANGELOG.md` notes.
 
 For local preparation without publishing anything:
 

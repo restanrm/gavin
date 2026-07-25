@@ -97,7 +97,7 @@ write_if_changed(str(path), text, new_text)
 path = Path("charts/gavin/Chart.yaml")
 text = path.read_text()
 new_text, version_count = re.subn(r"^version: .*$", f"version: {version}", text, count=1, flags=re.M)
-new_text, app_count = re.subn(r"^appVersion: .*$", f'appVersion: "{version}"', new_text, count=1, flags=re.M)
+new_text, app_count = re.subn(r"^appVersion: .*$", f'appVersion: "v{version}"', new_text, count=1, flags=re.M)
 if version_count != 1 or app_count != 1:
     raise SystemExit("Could not update charts/gavin/Chart.yaml version/appVersion")
 write_if_changed(str(path), text, new_text)
