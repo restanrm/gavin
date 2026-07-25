@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Admin metadata review highlighting** that visually flags albums with incomplete metadata in the catalog and edit dialog so admins can quickly spot records needing attention.
+- **Clickable metadata candidate selection** in album edit mode, letting admins apply a reviewed MusicBrainz match to an existing vinyl instead of only opening the source information link.
+
 ## [0.2.1] - 2026-07-25
 
 ### Added
