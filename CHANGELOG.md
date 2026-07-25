@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-25
+
 ### Added
 - **Automated GitHub release workflow** that prepares version files, validates builds/tests/Helm chart, tags releases, publishes GHCR images, and creates GitHub releases from changelog notes.
 - **Local release preparation helpers** via `scripts/prepare-release.sh`, `scripts/extract-release-notes.sh`, and `mise run release:prepare` / `mise run release:notes`.
@@ -179,5 +181,6 @@ The workflow:
 
 For local preparation only, use `VERSION=0.2.0 mise run release:prepare`.
 
-[Unreleased]: https://github.com/restanrm/gavin/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/restanrm/gavin/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/restanrm/gavin/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/restanrm/gavin/releases/tag/v0.1.0
