@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Automated GitHub release workflow** that prepares version files, validates builds/tests/Helm chart, tags releases, publishes GHCR images, and creates GitHub releases from changelog notes.
+- **Local release preparation helpers** via `scripts/prepare-release.sh`, `scripts/extract-release-notes.sh`, and `mise run release:prepare` / `mise run release:notes`.
 - **Internet album metadata enrichment** using MusicBrainz and Cover Art Archive when admins add vinyls individually or in bulk.
 - **Metadata choice marking** for bulk-imported albums with multiple plausible MusicBrainz matches (`metadata_status=needs_choice`).
 - **Async startup metadata completeness job** that retries pending, failed, or missing metadata lookups after boot.
@@ -162,21 +164,20 @@ None (initial release)
 
 ## Release Checklist Template
 
-When preparing a new release:
+Preferred release path: run the manual GitHub Actions workflow `.github/workflows/release.yml` from the default branch with the target semantic version.
 
-- [ ] Update version in `Cargo.toml`
-- [ ] Update version in `package.json`
-- [ ] Update `appVersion` in `charts/gavin/Chart.yaml`
-- [ ] Update `version` in `charts/gavin/Chart.yaml` for chart changes
-- [ ] Update CHANGELOG.md with new version
-- [ ] Build and test Docker image
-- [ ] Test Helm chart installation
-- [ ] Run `helm lint charts/gavin`
-- [ ] Update documentation if needed
-- [ ] Tag release in git: `git tag -a v0.1.0 -m "Release v0.1.0"`
-- [ ] Push tags: `git push --tags`
-- [ ] Build and push Docker image with version tag
-- [ ] Create GitHub release with notes from CHANGELOG
+The workflow:
+
+- [ ] Updates version files (`Cargo.toml`, `Cargo.lock`, `package.json`, `package-lock.json`, `charts/gavin/Chart.yaml`)
+- [ ] Promotes `CHANGELOG.md` `Unreleased` notes to the new version
+- [ ] Runs backend/frontend tests and builds
+- [ ] Runs `helm lint charts/gavin` and `helm template`
+- [ ] Builds the container image before publishing
+- [ ] Creates a release commit and annotated `vX.Y.Z` tag
+- [ ] Pushes GHCR image tags (`X.Y.Z`, `vX.Y.Z`, and optionally `latest`)
+- [ ] Creates the GitHub release with notes from `CHANGELOG.md`
+
+For local preparation only, use `VERSION=0.2.0 mise run release:prepare`.
 
 [Unreleased]: https://github.com/restanrm/gavin/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/restanrm/gavin/releases/tag/v0.1.0

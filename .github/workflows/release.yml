@@ -1,0 +1,165 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semantic version to release, without leading v (for example 0.2.0)
+        required: true
+        type: string
+      publish_latest:
+        description: Also push the latest container tag
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  release:
+    name: Release Gavin
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate release input
+        id: release_input
+        shell: bash
+        run: |
+          set -euo pipefail
+          default_branch="${{ github.event.repository.default_branch }}"
+          if [[ "${GITHUB_REF_TYPE}" != "branch" || "${GITHUB_REF_NAME}" != "$default_branch" ]]; then
+            echo "Run releases from the default branch ($default_branch), not ${GITHUB_REF_TYPE} ${GITHUB_REF_NAME}." >&2
+            exit 1
+          fi
+          version="${{ inputs.version }}"
+          version="${version#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid semantic version: ${{ inputs.version }}" >&2
+            exit 1
+          fi
+          if git rev-parse "v${version}" >/dev/null 2>&1; then
+            echo "Tag already exists: v${version}" >&2
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Prepare release files
+        run: scripts/prepare-release.sh "${{ steps.release_input.outputs.version }}"
+
+      - name: Run tests
+        run: |
+          cargo test
+          npm test -- --run
+
+      - name: Build application
+        run: |
+          npm run build
+          cargo build
+
+      - name: Validate Helm chart
+        run: |
+          helm lint charts/gavin
+          helm template gavin charts/gavin >/tmp/gavin-chart.yaml
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build container image before publishing
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: false
+          tags: gavin:${{ steps.release_input.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Extract release notes
+        run: scripts/extract-release-notes.sh "${{ steps.release_input.outputs.version }}" > /tmp/release-notes.md
+
+      - name: Commit and tag release
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.toml Cargo.lock package.json package-lock.json charts/gavin/Chart.yaml CHANGELOG.md
+          git commit -m "chore: release ${{ steps.release_input.outputs.tag }}"
+          git tag -a "${{ steps.release_input.outputs.tag }}" -m "Release ${{ steps.release_input.outputs.tag }}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git push origin "${{ steps.release_input.outputs.tag }}"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute container tags
+        id: image_tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="${REGISTRY}/${IMAGE_NAME,,}"
+          {
+            echo 'tags<<EOF'
+            echo "${image}:${{ steps.release_input.outputs.version }}"
+            echo "${image}:${{ steps.release_input.outputs.tag }}"
+            if [[ "${{ inputs.publish_latest }}" == "true" ]]; then
+              echo "${image}:latest"
+            fi
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and push container image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.image_tags.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.release_input.outputs.tag }}" \
+            --title "Gavin ${{ steps.release_input.outputs.tag }}" \
+            --notes-file /tmp/release-notes.md

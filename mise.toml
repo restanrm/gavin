@@ -32,6 +32,14 @@ run = [
 description = "Build the production container image with Podman"
 run = "podman build -t gavin:latest ."
 
+[tasks."release:prepare"]
+description = "Prepare release version files locally. Usage: VERSION=0.2.0 mise run release:prepare"
+run = "test -n \"${VERSION:-}\" || (echo 'Set VERSION, for example: VERSION=0.2.0 mise run release:prepare' >&2; exit 2); scripts/prepare-release.sh \"$VERSION\""
+
+[tasks."release:notes"]
+description = "Print release notes from CHANGELOG.md. Usage: VERSION=0.2.0 mise run release:notes"
+run = "test -n \"${VERSION:-}\" || (echo 'Set VERSION, for example: VERSION=0.2.0 mise run release:notes' >&2; exit 2); scripts/extract-release-notes.sh \"$VERSION\""
+
 [tasks."k3d:dev"]
 description = "Build with Podman and deploy Gavin to a local k3d cluster in AUTH_MODE=dev"
 run = "./scripts/k3d-dev.sh"
