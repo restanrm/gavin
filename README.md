@@ -285,7 +285,7 @@ Miles Davis,Kind of Blue,1959,Essential jazz album
 
 ## Album Cover Photo Import
 
-Admins can import a vinyl from a photo of the album cover. Gavin asks the configured vision provider to identify the cover image, resolves the detected album terms against MusicBrainz, downloads the official Cover Art Archive thumbnail into `UPLOAD_DIR/album-covers`, and stores the Gavin-served `/uploads/album-covers/...` URL for the matched album instead of storing the uploaded photo.
+Admins can import a vinyl from a photo of the album cover. In the admin UI, they can either choose an existing image or use the camera-oriented “Take photo” action on mobile devices. Gavin asks the configured vision provider to identify the cover image, resolves the detected album terms against MusicBrainz, downloads the official Cover Art Archive thumbnail into `UPLOAD_DIR/album-covers`, and stores the Gavin-served `/uploads/album-covers/...` URL for the matched album instead of storing the uploaded photo.
 
 MusicBrainz and Cover Art Archive are still used for free/open metadata and artwork. A freely available non-AI reverse-cover search API is not currently configured, so visual identification can use Gemini (`ALBUM_COVER_RECOGNITION_PROVIDER=gemini`) or ChatGPT/OpenAI (`ALBUM_COVER_RECOGNITION_PROVIDER=openai`). Because visual recognition can be wrong, Gavin always shows the uploaded cover next to candidate jackets and asks the admin to click the matching jacket before importing.
 

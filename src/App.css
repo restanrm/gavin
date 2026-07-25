@@ -230,6 +230,21 @@
   color: var(--color-text-muted);
 }
 
+.cover-import-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+
+.cover-import-file-input {
+  display: none;
+}
+
+.cover-import-picker-help {
+  margin-top: var(--spacing-sm);
+  margin-bottom: 0;
+}
+
 .success-message {
   padding: var(--spacing-md);
   margin: var(--spacing-lg) 0;

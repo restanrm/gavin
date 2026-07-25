@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createVinylFromCandidate, importCoverImage } from '../utils/api';
 import type { AlbumCandidate, CoverImportResponse } from '../types';
 
@@ -13,6 +13,8 @@ export function CoverImport({ onSuccess }: CoverImportProps) {
   const [selectingId, setSelectingId] = useState<string | null>(null);
   const [result, setResult] = useState<CoverImportResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     return () => {
@@ -31,6 +33,11 @@ export function CoverImport({ onSuccess }: CoverImportProps) {
     setPreviewUrl(selectedFile ? URL.createObjectURL(selectedFile) : null);
     setResult(null);
     setError(null);
+  };
+
+  const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    handleSelectedFile(event.target.files?.[0] ?? null);
+    event.target.value = '';
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -99,17 +106,51 @@ export function CoverImport({ onSuccess }: CoverImportProps) {
       )}
 
       <div className="form-group">
-        <label htmlFor="cover-import-image" className="form-label">
-          Cover photo to identify
-        </label>
+        <span className="form-label">Cover photo to identify</span>
+        <div className="cover-import-picker">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={submitting}
+          >
+            Choose image
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => cameraInputRef.current?.click()}
+            disabled={submitting}
+          >
+            Take photo
+          </button>
+        </div>
         <input
+          ref={fileInputRef}
           id="cover-import-image"
           type="file"
           accept="image/*"
-          onChange={(event) => handleSelectedFile(event.target.files?.[0] ?? null)}
+          onChange={handleFileInputChange}
           disabled={submitting}
-          className="file-input"
+          className="cover-import-file-input"
+          aria-hidden="true"
+          tabIndex={-1}
         />
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleFileInputChange}
+          disabled={submitting}
+          className="cover-import-file-input"
+          aria-hidden="true"
+          tabIndex={-1}
+        />
+        <p className="help-text cover-import-picker-help">
+          On phones and tablets, “Take photo” opens the camera when supported.
+        </p>
+        {file && <p className="upload-status">Selected: {file.name}</p>}
       </div>
 
       <button
