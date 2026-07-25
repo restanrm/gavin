@@ -275,6 +275,44 @@
   margin-top: var(--spacing-sm);
 }
 
+.metadata-badge {
+  display: inline-block;
+  margin-top: var(--spacing-sm);
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background-color: var(--color-bg-alt);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.metadata-needs_choice {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.metadata-error,
+.metadata-not_found {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.metadata-candidates {
+  margin-top: var(--spacing-sm);
+  font-size: 0.8125rem;
+}
+
+.metadata-candidates ul {
+  margin: var(--spacing-xs) 0 0;
+  padding-left: var(--spacing-lg);
+}
+
+.metadata-error {
+  margin-top: var(--spacing-xs);
+  color: #991b1b;
+  font-size: 0.8125rem;
+}
+
 .delete-btn {
   margin: 0 var(--spacing-lg) var(--spacing-lg);
   width: calc(100% - var(--spacing-xl));

@@ -1,5 +1,7 @@
 import type { Vinyl, User, UploadResponse, BulkImportItem } from '../types';
 
+type VinylInput = Pick<Vinyl, 'artist' | 'title' | 'release_year' | 'notes' | 'cover_image_url'>;
+
 const BASE_URL = '/api';
 
 async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
@@ -36,14 +38,14 @@ export async function logout(): Promise<void> {
   window.location.reload();
 }
 
-export async function createVinyl(vinyl: Omit<Vinyl, 'id' | 'created_at'>): Promise<Vinyl> {
+export async function createVinyl(vinyl: VinylInput): Promise<Vinyl> {
   return fetchJSON<Vinyl>(`${BASE_URL}/admin/vinyls`, {
     method: 'POST',
     body: JSON.stringify(vinyl),
   });
 }
 
-export async function updateVinyl(id: string, vinyl: Partial<Omit<Vinyl, 'id' | 'created_at'>>): Promise<Vinyl> {
+export async function updateVinyl(id: string, vinyl: Partial<VinylInput>): Promise<Vinyl> {
   return fetchJSON<Vinyl>(`${BASE_URL}/admin/vinyls/${id}`, {
     method: 'PUT',
     body: JSON.stringify(vinyl),

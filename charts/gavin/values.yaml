@@ -130,6 +130,11 @@ config:
   rustLog: "info,gavin=info"
   cookieSecure: "true"
   authMode: "oidc"
+  albumMetadataEnabled: "true"
+  # Optional; set to identify your deployment to MusicBrainz.
+  albumMetadataUserAgent: ""
+  musicbrainzBaseUrl: "https://musicbrainz.org"
+  coverArtArchiveBaseUrl: "https://coverartarchive.org"
 
 # OIDC and Session secrets configuration
 # Option 1: Use an existing secret (recommended for production)

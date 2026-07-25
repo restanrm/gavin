@@ -391,6 +391,10 @@ git commit -m "Add sealed secrets for gavin"
 | `OIDC_REDIRECT_URL` | No | `https://<PUBLIC_DOMAIN>/api/auth/callback` | OAuth2 callback URL |
 | `SESSION_SECRET` | Yes in OIDC mode | - | Session encryption key (64+ chars) |
 | `COOKIE_SECURE` | No | `true` | Use secure cookies (HTTPS only) |
+| `ALBUM_METADATA_ENABLED` | No | `true` | Enable MusicBrainz/Cover Art Archive enrichment when albums are added |
+| `ALBUM_METADATA_USER_AGENT` | No | generated | User agent for MusicBrainz requests; set this to identify your deployment |
+| `MUSICBRAINZ_BASE_URL` | No | `https://musicbrainz.org` | MusicBrainz API base URL |
+| `COVER_ART_ARCHIVE_BASE_URL` | No | `https://coverartarchive.org` | Cover Art Archive base URL |
 | `RUST_LOG` | No | `info,gavin=info` | Log level configuration |
 
 ## Troubleshooting

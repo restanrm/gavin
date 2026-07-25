@@ -55,7 +55,7 @@ export function BulkImport({ onSuccess }: BulkImportProps) {
       <p className="help-text">
         Format: <code>artist,title,year,notes,cover_url</code> (one per line)
         <br />
-        Artist and title are required. Year, notes, and cover URL are optional.
+        Artist and title are required. Year, notes, and cover URL are optional. Album metadata is fetched online during import; rows with multiple matches are marked for review.
       </p>
 
       <details className="example-details">

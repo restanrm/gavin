@@ -5,7 +5,7 @@ use axum::{
     Json,
 };
 use serde::Serialize;
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 use tower_sessions::Session;
 
 use crate::{
@@ -28,6 +28,10 @@ pub async fn create_vinyl(
 ) -> Result<Json<Vinyl>> {
     require_admin(&state, &session).await?;
     let vinyl = Vinyl::create(&state.pool, input).await?;
+    let vinyl = state
+        .metadata_client
+        .enrich_vinyl(&state.pool, &vinyl.id)
+        .await?;
     Ok(Json(vinyl))
 }
 
@@ -63,8 +67,18 @@ pub async fn bulk_create_vinyls(
     require_admin(&state, &session).await?;
 
     let mut created = Vec::new();
-    for item in request.items {
+    for (index, item) in request.items.into_iter().enumerate() {
+        if index > 0 {
+            // MusicBrainz asks clients to keep request rates modest. Bulk imports
+            // enrich synchronously so admins immediately see rows needing choice.
+            tokio::time::sleep(Duration::from_millis(1100)).await;
+        }
+
         let vinyl = Vinyl::create(&state.pool, item).await?;
+        let vinyl = state
+            .metadata_client
+            .enrich_vinyl(&state.pool, &vinyl.id)
+            .await?;
         created.push(vinyl);
     }
 

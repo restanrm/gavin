@@ -45,6 +45,10 @@ pub struct Config {
     pub oidc_redirect_url: Option<String>,
     pub session_secret: Option<String>,
     pub cookie_secure: bool,
+    pub album_metadata_enabled: bool,
+    pub album_metadata_user_agent: Option<String>,
+    pub musicbrainz_base_url: String,
+    pub cover_art_archive_base_url: String,
 }
 
 impl Config {
@@ -108,6 +112,15 @@ impl Config {
                 .unwrap_or_else(|_| "true".to_string())
                 .parse()
                 .unwrap_or(true),
+            album_metadata_enabled: env::var("ALBUM_METADATA_ENABLED")
+                .unwrap_or_else(|_| "true".to_string())
+                .parse()
+                .unwrap_or(true),
+            album_metadata_user_agent: env::var("ALBUM_METADATA_USER_AGENT").ok(),
+            musicbrainz_base_url: env::var("MUSICBRAINZ_BASE_URL")
+                .unwrap_or_else(|_| "https://musicbrainz.org".to_string()),
+            cover_art_archive_base_url: env::var("COVER_ART_ARCHIVE_BASE_URL")
+                .unwrap_or_else(|_| "https://coverartarchive.org".to_string()),
         })
     }
 }

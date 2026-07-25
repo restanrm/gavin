@@ -55,6 +55,9 @@ export function VinylForm({ onSuccess }: VinylFormProps) {
   return (
     <form onSubmit={handleSubmit} className="vinyl-form">
       <h3>Add New Vinyl</h3>
+      <p className="help-text">
+        Album metadata is fetched online after submit and saved with the record.
+      </p>
 
       {error && (
         <div className="error-message" role="alert">

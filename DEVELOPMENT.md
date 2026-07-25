@@ -134,6 +134,7 @@ See `.env.example` for full list. Critical ones:
 - `OIDC_*`: Provider configuration
 - `SESSION_SECRET`: Must be random and constant
 - `COOKIE_SECURE`: true for HTTPS, false for HTTP
+- `ALBUM_METADATA_ENABLED`: enables MusicBrainz/Cover Art Archive enrichment and startup metadata checks
 
 ## Building and Running
 

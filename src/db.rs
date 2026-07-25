@@ -17,6 +17,13 @@ pub struct Vinyl {
     pub notes: Option<String>,
     pub cover_image_url: Option<String>,
     pub created_at: DateTime<Utc>,
+    pub metadata_status: String,
+    pub metadata_source: Option<String>,
+    pub metadata_source_id: Option<String>,
+    pub metadata_source_url: Option<String>,
+    pub metadata_candidates: Option<String>,
+    pub metadata_error: Option<String>,
+    pub metadata_checked_at: Option<DateTime<Utc>>,
 }
 
 /// Input for creating a new vinyl
@@ -24,8 +31,10 @@ pub struct Vinyl {
 pub struct CreateVinyl {
     pub artist: String,
     pub title: String,
+    #[serde(alias = "year")]
     pub release_year: Option<i32>,
     pub notes: Option<String>,
+    #[serde(alias = "cover_url")]
     pub cover_image_url: Option<String>,
 }
 
@@ -37,6 +46,38 @@ pub struct UpdateVinyl {
     pub release_year: Option<i32>,
     pub notes: Option<String>,
     pub cover_image_url: Option<String>,
+}
+
+/// Metadata fields updated by the album metadata enrichment job.
+#[derive(Debug)]
+pub struct MetadataUpdate {
+    pub release_year: Option<i32>,
+    pub notes: Option<String>,
+    pub cover_image_url: Option<String>,
+    pub metadata_status: String,
+    pub metadata_source: Option<String>,
+    pub metadata_source_id: Option<String>,
+    pub metadata_source_url: Option<String>,
+    pub metadata_candidates: Option<String>,
+    pub metadata_error: Option<String>,
+    pub metadata_checked_at: Option<DateTime<Utc>>,
+}
+
+impl MetadataUpdate {
+    pub fn error(status: impl Into<String>, error: impl Into<String>) -> Self {
+        Self {
+            release_year: None,
+            notes: None,
+            cover_image_url: None,
+            metadata_status: status.into(),
+            metadata_source: Some("musicbrainz".to_string()),
+            metadata_source_id: None,
+            metadata_source_url: None,
+            metadata_candidates: None,
+            metadata_error: Some(error.into()),
+            metadata_checked_at: Some(Utc::now()),
+        }
+    }
 }
 
 /// Bulk create request
@@ -54,7 +95,9 @@ impl Vinyl {
                 // Empty search, fetch all
                 sqlx::query_as::<_, Vinyl>(
                     r#"
-                    SELECT id, artist, title, release_year, notes, cover_image_url, created_at
+                    SELECT id, artist, title, release_year, notes, cover_image_url, created_at,
+                           metadata_status, metadata_source, metadata_source_id, metadata_source_url,
+                           metadata_candidates, metadata_error, metadata_checked_at
                     FROM vinyls
                     ORDER BY LOWER(artist), LOWER(title)
                     "#,
@@ -69,7 +112,9 @@ impl Vinyl {
 
                 sqlx::query_as::<_, Vinyl>(
                     r#"
-                    SELECT id, artist, title, release_year, notes, cover_image_url, created_at
+                    SELECT id, artist, title, release_year, notes, cover_image_url, created_at,
+                           metadata_status, metadata_source, metadata_source_id, metadata_source_url,
+                           metadata_candidates, metadata_error, metadata_checked_at
                     FROM vinyls
                     WHERE LOWER(artist) LIKE ?1
                        OR LOWER(title) LIKE ?1
@@ -86,7 +131,9 @@ impl Vinyl {
         } else {
             sqlx::query_as::<_, Vinyl>(
                 r#"
-                SELECT id, artist, title, release_year, notes, cover_image_url, created_at
+                SELECT id, artist, title, release_year, notes, cover_image_url, created_at,
+                       metadata_status, metadata_source, metadata_source_id, metadata_source_url,
+                       metadata_candidates, metadata_error, metadata_checked_at
                 FROM vinyls
                 ORDER BY LOWER(artist), LOWER(title)
                 "#,
@@ -102,7 +149,9 @@ impl Vinyl {
     pub async fn get(pool: &SqlitePool, id: &str) -> Result<Self> {
         let vinyl = sqlx::query_as::<_, Vinyl>(
             r#"
-            SELECT id, artist, title, release_year, notes, cover_image_url, created_at
+            SELECT id, artist, title, release_year, notes, cover_image_url, created_at,
+                   metadata_status, metadata_source, metadata_source_id, metadata_source_url,
+                   metadata_candidates, metadata_error, metadata_checked_at
             FROM vinyls
             WHERE id = ?1
             "#,
@@ -128,11 +177,14 @@ impl Vinyl {
 
         let id = Uuid::new_v4().to_string();
         let now = Utc::now();
+        let metadata_status = "pending".to_string();
 
         sqlx::query(
             r#"
-            INSERT INTO vinyls (id, artist, title, release_year, notes, cover_image_url, created_at)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            INSERT INTO vinyls (
+                id, artist, title, release_year, notes, cover_image_url, created_at, metadata_status
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
             "#,
         )
         .bind(&id)
@@ -142,6 +194,7 @@ impl Vinyl {
         .bind(&input.notes)
         .bind(&input.cover_image_url)
         .bind(now)
+        .bind(&metadata_status)
         .execute(pool)
         .await?;
 
@@ -153,6 +206,13 @@ impl Vinyl {
             notes: input.notes,
             cover_image_url: input.cover_image_url,
             created_at: now,
+            metadata_status,
+            metadata_source: None,
+            metadata_source_id: None,
+            metadata_source_url: None,
+            metadata_candidates: None,
+            metadata_error: None,
+            metadata_checked_at: None,
         })
     }
 
@@ -168,7 +228,15 @@ impl Vinyl {
                 title = COALESCE(?2, title),
                 release_year = COALESCE(?3, release_year),
                 notes = COALESCE(?4, notes),
-                cover_image_url = COALESCE(?5, cover_image_url)
+                cover_image_url = COALESCE(?5, cover_image_url),
+                metadata_status = CASE
+                    WHEN ?1 IS NOT NULL OR ?2 IS NOT NULL THEN 'pending'
+                    ELSE metadata_status
+                END,
+                metadata_checked_at = CASE
+                    WHEN ?1 IS NOT NULL OR ?2 IS NOT NULL THEN NULL
+                    ELSE metadata_checked_at
+                END
             WHERE id = ?6
             "#,
         )
@@ -183,6 +251,64 @@ impl Vinyl {
 
         // Fetch updated record
         Self::get(pool, id).await
+    }
+
+    /// Update fields populated by album metadata enrichment.
+    pub async fn update_metadata(pool: &SqlitePool, id: &str, input: MetadataUpdate) -> Result<()> {
+        let result = sqlx::query(
+            r#"
+            UPDATE vinyls
+            SET release_year = COALESCE(?1, release_year),
+                notes = COALESCE(?2, notes),
+                cover_image_url = COALESCE(?3, cover_image_url),
+                metadata_status = ?4,
+                metadata_source = ?5,
+                metadata_source_id = ?6,
+                metadata_source_url = ?7,
+                metadata_candidates = ?8,
+                metadata_error = ?9,
+                metadata_checked_at = ?10
+            WHERE id = ?11
+            "#,
+        )
+        .bind(input.release_year)
+        .bind(&input.notes)
+        .bind(&input.cover_image_url)
+        .bind(&input.metadata_status)
+        .bind(&input.metadata_source)
+        .bind(&input.metadata_source_id)
+        .bind(&input.metadata_source_url)
+        .bind(&input.metadata_candidates)
+        .bind(&input.metadata_error)
+        .bind(input.metadata_checked_at)
+        .bind(id)
+        .execute(pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        Ok(())
+    }
+
+    /// IDs for vinyls that need a best-effort metadata lookup.
+    pub async fn list_requiring_metadata(pool: &SqlitePool, limit: i64) -> Result<Vec<String>> {
+        let ids = sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT id
+            FROM vinyls
+            WHERE metadata_checked_at IS NULL
+               OR metadata_status IN ('pending', 'error', 'not_found')
+            ORDER BY created_at
+            LIMIT ?1
+            "#,
+        )
+        .bind(limit)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(ids)
     }
 
     /// Delete a vinyl
@@ -207,7 +333,7 @@ mod tests {
 
     async fn setup_test_db() -> SqlitePool {
         let pool = SqlitePool::connect(":memory:").await.unwrap();
-        
+
         sqlx::query(
             r#"
             CREATE TABLE vinyls (
@@ -217,7 +343,14 @@ mod tests {
                 release_year INTEGER,
                 notes TEXT,
                 cover_image_url TEXT,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                metadata_status TEXT NOT NULL DEFAULT 'pending',
+                metadata_source TEXT,
+                metadata_source_id TEXT,
+                metadata_source_url TEXT,
+                metadata_candidates TEXT,
+                metadata_error TEXT,
+                metadata_checked_at TEXT
             )
             "#,
         )
@@ -243,9 +376,27 @@ mod tests {
         let vinyl = Vinyl::create(&pool, input).await.unwrap();
         assert_eq!(vinyl.artist, "Pink Floyd");
         assert_eq!(vinyl.title, "The Dark Side of the Moon");
+        assert_eq!(vinyl.metadata_status, "pending");
 
         let fetched = Vinyl::get(&pool, &vinyl.id).await.unwrap();
         assert_eq!(fetched.id, vinyl.id);
+    }
+
+    #[tokio::test]
+    async fn test_create_vinyl_accepts_bulk_aliases() {
+        let input: CreateVinyl = serde_json::from_value(serde_json::json!({
+            "artist": "The Beatles",
+            "title": "Abbey Road",
+            "year": 1969,
+            "cover_url": "https://example.com/cover.jpg"
+        }))
+        .unwrap();
+
+        assert_eq!(input.release_year, Some(1969));
+        assert_eq!(
+            input.cover_image_url.as_deref(),
+            Some("https://example.com/cover.jpg")
+        );
     }
 
     #[tokio::test]
@@ -368,6 +519,99 @@ mod tests {
         assert_eq!(updated.artist, "Updated Artist");
         assert_eq!(updated.title, "Album"); // Unchanged
         assert_eq!(updated.release_year, Some(2020));
+        assert_eq!(updated.metadata_status, "pending");
+    }
+
+    #[tokio::test]
+    async fn test_update_metadata() {
+        let pool = setup_test_db().await;
+        let vinyl = Vinyl::create(
+            &pool,
+            CreateVinyl {
+                artist: "Test".to_string(),
+                title: "Album".to_string(),
+                release_year: None,
+                notes: None,
+                cover_image_url: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        Vinyl::update_metadata(
+            &pool,
+            &vinyl.id,
+            MetadataUpdate {
+                release_year: Some(1970),
+                notes: Some("Metadata: https://example.com".to_string()),
+                cover_image_url: Some("https://example.com/cover.jpg".to_string()),
+                metadata_status: "complete".to_string(),
+                metadata_source: Some("musicbrainz".to_string()),
+                metadata_source_id: Some("mbid".to_string()),
+                metadata_source_url: Some("https://musicbrainz.org/release-group/mbid".to_string()),
+                metadata_candidates: None,
+                metadata_error: None,
+                metadata_checked_at: Some(Utc::now()),
+            },
+        )
+        .await
+        .unwrap();
+
+        let updated = Vinyl::get(&pool, &vinyl.id).await.unwrap();
+        assert_eq!(updated.release_year, Some(1970));
+        assert_eq!(updated.metadata_status, "complete");
+        assert_eq!(updated.metadata_source_id.as_deref(), Some("mbid"));
+    }
+
+    #[tokio::test]
+    async fn test_list_requiring_metadata() {
+        let pool = setup_test_db().await;
+        let pending = Vinyl::create(
+            &pool,
+            CreateVinyl {
+                artist: "Test".to_string(),
+                title: "Pending".to_string(),
+                release_year: None,
+                notes: None,
+                cover_image_url: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let complete = Vinyl::create(
+            &pool,
+            CreateVinyl {
+                artist: "Test".to_string(),
+                title: "Complete".to_string(),
+                release_year: None,
+                notes: None,
+                cover_image_url: None,
+            },
+        )
+        .await
+        .unwrap();
+        Vinyl::update_metadata(
+            &pool,
+            &complete.id,
+            MetadataUpdate {
+                release_year: None,
+                notes: None,
+                cover_image_url: None,
+                metadata_status: "complete".to_string(),
+                metadata_source: Some("musicbrainz".to_string()),
+                metadata_source_id: Some("mbid".to_string()),
+                metadata_source_url: Some("https://musicbrainz.org/release-group/mbid".to_string()),
+                metadata_candidates: None,
+                metadata_error: None,
+                metadata_checked_at: Some(Utc::now()),
+            },
+        )
+        .await
+        .unwrap();
+
+        let ids = Vinyl::list_requiring_metadata(&pool, 10).await.unwrap();
+        assert_eq!(ids, vec![pending.id]);
     }
 
     #[tokio::test]

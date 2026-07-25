@@ -12,6 +12,7 @@ describe('VinylCard', () => {
     notes: 'Final studio album',
     cover_image_url: 'https://example.com/cover.jpg',
     created_at: '2024-01-01T00:00:00Z',
+    metadata_status: 'complete',
   };
 
   it('renders vinyl information', () => {
@@ -52,12 +53,34 @@ describe('VinylCard', () => {
     expect(screen.getByLabelText(/delete abbey road/i)).toBeInTheDocument();
   });
 
+  it('shows metadata choices for admins', () => {
+    const needsChoice: Vinyl = {
+      ...mockVinyl,
+      metadata_status: 'needs_choice',
+      metadata_candidates: JSON.stringify([
+        {
+          id: 'mbid',
+          artist: 'The Beatles',
+          title: 'Abbey Road',
+          release_year: 1969,
+          source_url: 'https://musicbrainz.org/release-group/mbid',
+        },
+      ]),
+    };
+
+    render(<VinylCard vinyl={needsChoice} isAdmin />);
+
+    expect(screen.getByText('Metadata choice required')).toBeInTheDocument();
+    expect(screen.getByText('Review possible album matches')).toBeInTheDocument();
+  });
+
   it('handles optional fields being absent', () => {
     const minimalVinyl: Vinyl = {
       id: '2',
       artist: 'Pink Floyd',
       title: 'The Wall',
       created_at: '2024-01-01T00:00:00Z',
+      metadata_status: 'pending',
     };
 
     render(<VinylCard vinyl={minimalVinyl} />);

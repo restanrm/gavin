@@ -9,7 +9,7 @@ use tower_http::services::{ServeDir, ServeFile};
 use tower_sessions::{Expiry, SessionManagerLayer};
 use tower_sessions_sqlx_store::SqliteStore;
 
-use crate::{auth::AuthClient, config::Config, handlers};
+use crate::{album_metadata::AlbumMetadataClient, auth::AuthClient, config::Config, handlers};
 
 /// Shared application state
 #[derive(Clone)]
@@ -17,6 +17,7 @@ pub struct AppState {
     pub pool: SqlitePool,
     pub auth_client: AuthClient,
     pub upload_dir: String,
+    pub metadata_client: AlbumMetadataClient,
 }
 
 /// Create the application router
@@ -24,6 +25,7 @@ pub async fn create_router(
     pool: SqlitePool,
     config: Config,
     auth_client: AuthClient,
+    metadata_client: AlbumMetadataClient,
 ) -> anyhow::Result<Router> {
     // Set up session store
     let session_store = SqliteStore::new(pool.clone());
@@ -46,6 +48,7 @@ pub async fn create_router(
         pool: pool.clone(),
         auth_client,
         upload_dir: config.upload_dir.clone(),
+        metadata_client,
     };
 
     // API routes

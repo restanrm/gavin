@@ -182,6 +182,13 @@ The frontend expects the following API endpoints:
   notes?: string;
   cover_image_url?: string;
   created_at: string;
+  metadata_status: 'pending' | 'complete' | 'needs_choice' | 'not_found' | 'error' | 'disabled';
+  metadata_source?: string;
+  metadata_source_id?: string;
+  metadata_source_url?: string;
+  metadata_candidates?: string; // JSON array of possible matches when metadata_status is needs_choice
+  metadata_error?: string;
+  metadata_checked_at?: string;
 }
 ```
 
@@ -239,6 +246,8 @@ artist,title,year,notes,cover_url
 - **notes** (optional): Additional notes
 - **cover_url** (optional): URL to cover image
 
+Bulk imports are enriched against MusicBrainz one album at a time. If several plausible albums match one CSV row, the row is created with `metadata_status: "needs_choice"` and the candidate albums are stored in `metadata_candidates` for admin review.
+
 ### Example
 
 ```csv
@@ -280,6 +289,15 @@ Key configuration options:
 - `UPLOAD_DIR` - Directory for uploaded files (default: `data/uploads`)
 - `PUBLIC_DOMAIN` - Public domain used for default callback URLs (default: `gavin.restanrm.fr`)
 - `HOST` / `PORT` - Server bind address (default: `0.0.0.0:3000`)
+- `ALBUM_METADATA_ENABLED` - Enable internet album metadata enrichment (default: `true`)
+- `ALBUM_METADATA_USER_AGENT` - Optional MusicBrainz user agent; recommended for public deployments
+- `MUSICBRAINZ_BASE_URL` - MusicBrainz API base URL (default: `https://musicbrainz.org`)
+- `COVER_ART_ARCHIVE_BASE_URL` - Cover Art Archive API base URL (default: `https://coverartarchive.org`)
+
+**Album Metadata Enrichment**:
+- Creating a vinyl (single or bulk) performs a best-effort lookup via MusicBrainz and stores release year, cover art URL, source URL, and lookup status in SQLite.
+- If multiple plausible album matches exist, Gavin marks the record as `needs_choice` and stores candidate choices instead of guessing.
+- On startup, Gavin launches an asynchronous background check that retries rows with pending, failed, or missing metadata lookups.
 
 **OIDC Configuration** (required when `AUTH_MODE=oidc`):
 - `OIDC_ISSUER_URL` - OIDC provider issuer URL

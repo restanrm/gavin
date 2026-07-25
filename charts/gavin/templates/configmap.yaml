@@ -14,3 +14,9 @@ data:
   RUST_LOG: {{ .Values.config.rustLog | quote }}
   COOKIE_SECURE: {{ .Values.config.cookieSecure | quote }}
   AUTH_MODE: {{ .Values.config.authMode | quote }}
+  ALBUM_METADATA_ENABLED: {{ .Values.config.albumMetadataEnabled | quote }}
+  {{- with .Values.config.albumMetadataUserAgent }}
+  ALBUM_METADATA_USER_AGENT: {{ . | quote }}
+  {{- end }}
+  MUSICBRAINZ_BASE_URL: {{ .Values.config.musicbrainzBaseUrl | quote }}
+  COVER_ART_ARCHIVE_BASE_URL: {{ .Values.config.coverArtArchiveBaseUrl | quote }}

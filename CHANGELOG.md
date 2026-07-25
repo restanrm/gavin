@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Internet album metadata enrichment** using MusicBrainz and Cover Art Archive when admins add vinyls individually or in bulk.
+- **Metadata choice marking** for bulk-imported albums with multiple plausible MusicBrainz matches (`metadata_status=needs_choice`).
+- **Async startup metadata completeness job** that retries pending, failed, or missing metadata lookups after boot.
 - **mise dev tasks** for local backend/frontend startup, tests, Podman builds, and k3d dev deployment.
 - **PWA/mobile support** with manifest, service worker, mobile metadata, and generated app icons/logo.
 - **Configurable public domain** via `PUBLIC_DOMAIN` and Helm `domain`, defaulting to `gavin.restanrm.fr`.

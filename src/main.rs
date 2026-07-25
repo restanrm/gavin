@@ -2,6 +2,7 @@
 //!
 //! A REST API backend for managing a vinyl record collection with OIDC authentication.
 
+mod album_metadata;
 mod auth;
 mod config;
 mod db;
@@ -64,8 +65,19 @@ async fn main() -> anyhow::Result<()> {
     let auth_client = auth::AuthClient::new(&config).await?;
     tracing::info!("Authentication client initialized");
 
+    let metadata_client = album_metadata::AlbumMetadataClient::from_config(&config)?;
+
     // Build application
-    let app = routes::create_router(pool, config.clone(), auth_client).await?;
+    let app = routes::create_router(
+        pool.clone(),
+        config.clone(),
+        auth_client,
+        metadata_client.clone(),
+    )
+    .await?;
+
+    // Start best-effort metadata completeness check in the background.
+    album_metadata::spawn_startup_metadata_job(pool, metadata_client);
 
     // Apply middleware
     let app = app.layer(TraceLayer::new_for_http());

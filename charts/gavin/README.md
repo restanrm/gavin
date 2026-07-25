@@ -107,6 +107,10 @@ The following table lists the configurable parameters and their default values.
 | `config.publicDomain` | Override app `PUBLIC_DOMAIN` (empty uses `domain`) | `""` |
 | `config.authMode` | Authentication mode (`oidc` or `dev`) | `oidc` |
 | `config.cookieSecure` | Secure cookies | `true` |
+| `config.albumMetadataEnabled` | Enable MusicBrainz/Cover Art Archive metadata enrichment | `true` |
+| `config.albumMetadataUserAgent` | Optional metadata lookup user agent | `""` |
+| `config.musicbrainzBaseUrl` | MusicBrainz base URL | `https://musicbrainz.org` |
+| `config.coverArtArchiveBaseUrl` | Cover Art Archive base URL | `https://coverartarchive.org` |
 
 ### Security Parameters
 
