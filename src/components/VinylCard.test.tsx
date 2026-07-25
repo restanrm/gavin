@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { VinylCard } from '../components/VinylCard';
 import type { Vinyl } from '../types';
 
@@ -32,6 +32,12 @@ describe('VinylCard', () => {
     expect(img).toHaveAttribute('src', 'https://example.com/cover.jpg');
   });
 
+  it('hides generated metadata notes from the catalog card', () => {
+    render(<VinylCard vinyl={{ ...mockVinyl, notes: 'Metadata: https://musicbrainz.org/release-group/mbid' }} />);
+
+    expect(screen.queryByText(/musicbrainz/)).not.toBeInTheDocument();
+  });
+
   it('renders placeholder when no cover image', () => {
     const vinylWithoutCover = { ...mockVinyl, cover_image_url: undefined };
     render(<VinylCard vinyl={vinylWithoutCover} />);
@@ -53,7 +59,7 @@ describe('VinylCard', () => {
     expect(screen.getByLabelText(/delete abbey road/i)).toBeInTheDocument();
   });
 
-  it('shows metadata choices for admins', () => {
+  it('hides metadata choices from the catalog card until editing', () => {
     const needsChoice: Vinyl = {
       ...mockVinyl,
       metadata_status: 'needs_choice',
@@ -68,7 +74,12 @@ describe('VinylCard', () => {
       ]),
     };
 
-    render(<VinylCard vinyl={needsChoice} isAdmin />);
+    render(<VinylCard vinyl={needsChoice} isAdmin onUpdate={() => {}} />);
+
+    expect(screen.queryByText('Metadata choice required')).not.toBeInTheDocument();
+    expect(screen.queryByText('Review possible album matches')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText(/edit abbey road/i));
 
     expect(screen.getByText('Metadata choice required')).toBeInTheDocument();
     expect(screen.getByText('Review possible album matches')).toBeInTheDocument();

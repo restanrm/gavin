@@ -4,11 +4,14 @@
 //! cover artwork. Enrichment is best-effort: network/API failures are recorded
 //! on the vinyl row instead of failing the user-facing create operation.
 
-use std::time::Duration;
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
 use chrono::Utc;
-use reqwest::Client;
+use reqwest::{header::CONTENT_TYPE, Client};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use unicode_normalization::UnicodeNormalization;
@@ -21,6 +24,9 @@ use crate::{
 
 const SOURCE_NAME: &str = "musicbrainz";
 const STARTUP_BATCH_SIZE: i64 = 100;
+const STARTUP_COVER_CACHE_BATCH_SIZE: i64 = 1_000;
+const COVER_CACHE_URL_PREFIX: &str = "/uploads/album-covers";
+const MAX_CACHED_COVER_SIZE: usize = 10 * 1024 * 1024;
 
 /// Metadata provider client.
 #[derive(Clone)]
@@ -29,6 +35,7 @@ pub struct AlbumMetadataClient {
     enabled: bool,
     musicbrainz_base_url: String,
     cover_art_archive_base_url: String,
+    cover_cache_dir: PathBuf,
     album_cover_recognition_provider: String,
     openai_api_key: Option<String>,
     openai_base_url: String,
@@ -61,6 +68,7 @@ impl AlbumMetadataClient {
                 .cover_art_archive_base_url
                 .trim_end_matches('/')
                 .to_string(),
+            cover_cache_dir: PathBuf::from(&config.upload_dir).join("album-covers"),
             album_cover_recognition_provider: config.album_cover_recognition_provider.clone(),
             openai_api_key: config.openai_api_key.clone(),
             openai_base_url: config.openai_base_url.trim_end_matches('/').to_string(),
@@ -89,7 +97,7 @@ impl AlbumMetadataClient {
             Ok(LookupOutcome::Selected(candidate)) => {
                 let update = MetadataUpdate {
                     release_year: vinyl.release_year.or(candidate.release_year),
-                    notes: vinyl.notes.or_else(|| candidate.notes()),
+                    notes: vinyl.notes,
                     cover_image_url: vinyl.cover_image_url.or(candidate.cover_image_url.clone()),
                     metadata_status: "complete".to_string(),
                     metadata_source: Some(SOURCE_NAME.to_string()),
@@ -588,7 +596,89 @@ impl AlbumMetadataClient {
             .collect())
     }
 
+    /// Cache a remote cover image and return a Gavin-served URL when possible.
+    pub async fn local_cover_url(
+        &self,
+        key_hint: Option<&str>,
+        cover_url: &str,
+    ) -> Option<String> {
+        let cover_url = cover_url.trim();
+        if cover_url.is_empty() {
+            return None;
+        }
+
+        if is_local_cover_url(cover_url) || !is_remote_url(cover_url) {
+            return Some(cover_url.to_string());
+        }
+
+        let cache_key = key_hint
+            .map(cover_cache_key)
+            .filter(|key| !key.is_empty())
+            .unwrap_or_else(|| stable_url_cache_key(cover_url));
+
+        match self.cache_cover_image(&cache_key, cover_url).await {
+            Ok(local_url) => Some(local_url),
+            Err(err) => {
+                tracing::warn!(cover_url, error = %err, "failed to cache album cover image");
+                Some(cover_url.to_string())
+            }
+        }
+    }
+
+    /// Download and localize external cover URLs already stored in SQLite.
+    pub async fn cache_existing_vinyl_covers(
+        &self,
+        pool: &SqlitePool,
+        limit: i64,
+    ) -> Result<usize> {
+        let covers = Vinyl::list_external_cover_images(pool, limit).await?;
+        let mut updated = 0;
+
+        for cover in covers {
+            let Some(local_url) = self
+                .local_cover_url(cover.metadata_source_id.as_deref(), &cover.cover_image_url)
+                .await
+            else {
+                continue;
+            };
+
+            if local_url != cover.cover_image_url {
+                Vinyl::update_cover_image_url(pool, &cover.id, &local_url).await?;
+                updated += 1;
+            }
+        }
+
+        Ok(updated)
+    }
+
     async fn fetch_cover_url(&self, release_group_id: &str) -> anyhow::Result<Option<String>> {
+        let cache_key = cover_cache_key(release_group_id);
+        if let Some(local_url) = self.cached_cover_url(&cache_key).await {
+            return Ok(Some(local_url));
+        }
+
+        let Some(remote_url) = self.fetch_cover_art_archive_url(release_group_id).await? else {
+            return Ok(None);
+        };
+
+        match self.cache_cover_image(&cache_key, &remote_url).await {
+            Ok(local_url) => Ok(Some(local_url)),
+            Err(err) => {
+                tracing::warn!(
+                    release_group_id,
+                    remote_url,
+                    error = %err,
+                    "failed to cache Cover Art Archive image"
+                );
+                Ok(None)
+            }
+        }
+    }
+
+    async fn fetch_cover_art_archive_url(
+        &self,
+        release_group_id: &str,
+    ) -> anyhow::Result<Option<String>> {
         let url = format!(
             "{}/release-group/{}",
             self.cover_art_archive_base_url, release_group_id
@@ -606,9 +696,66 @@ impl AlbumMetadataClient {
             }
             image
                 .thumbnails
-                .and_then(|thumbnails| thumbnails.large.or(thumbnails.small))
+                .and_then(|thumbnails| thumbnails.small.or(thumbnails.large))
                 .or(image.image)
         }))
+    }
+
+    async fn cached_cover_url(&self, cache_key: &str) -> Option<String> {
+        for extension in ["jpg", "jpeg", "png", "webp", "gif"] {
+            let file_name = format!("{cache_key}.{extension}");
+            if tokio::fs::metadata(self.cover_cache_dir.join(&file_name))
+                .await
+                .is_ok()
+            {
+                return Some(format!("{COVER_CACHE_URL_PREFIX}/{file_name}"));
+            }
+        }
+
+        None
+    }
+
+    async fn cache_cover_image(
+        &self,
+        cache_key: &str,
+        cover_url: &str,
+    ) -> anyhow::Result<String> {
+        if let Some(local_url) = self.cached_cover_url(cache_key).await {
+            return Ok(local_url);
+        }
+
+        tokio::fs::create_dir_all(&self.cover_cache_dir).await?;
+
+        let response = self.http.get(cover_url).send().await?.error_for_status()?;
+        if let Some(length) = response.content_length() {
+            if length > MAX_CACHED_COVER_SIZE as u64 {
+                anyhow::bail!("cover image is larger than 10MB");
+            }
+        }
+
+        let content_type = response
+            .headers()
+            .get(CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string);
+        let extension = cover_file_extension(content_type.as_deref(), cover_url)
+            .ok_or_else(|| anyhow::anyhow!("unsupported cover image type"))?;
+        let bytes = response.bytes().await?;
+        if bytes.len() > MAX_CACHED_COVER_SIZE {
+            anyhow::bail!("cover image is larger than 10MB");
+        }
+
+        let file_name = format!("{cache_key}.{extension}");
+        let file_path = self.cover_cache_dir.join(&file_name);
+        let temp_path = self.cover_cache_dir.join(format!(
+            "{file_name}.{}.tmp",
+            Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        ));
+
+        tokio::fs::write(&temp_path, &bytes).await?;
+        tokio::fs::rename(&temp_path, &file_path).await?;
+
+        Ok(format!("{COVER_CACHE_URL_PREFIX}/{file_name}"))
     }
 }
 
@@ -636,6 +783,14 @@ pub fn spawn_startup_metadata_job(pool: SqlitePool, client: AlbumMetadataClient)
                 tracing::info!(checked = total, "Album metadata completeness check finished");
             }
             Err(err) => tracing::warn!(error = %err, "failed to list vinyls requiring metadata"),
+        }
+
+        match client
+            .cache_existing_vinyl_covers(&pool, STARTUP_COVER_CACHE_BATCH_SIZE)
+            .await
+        {
+            Ok(updated) => tracing::info!(updated, "Album cover cache check finished"),
+            Err(err) => tracing::warn!(error = %err, "failed to cache existing album covers"),
         }
     });
 }
@@ -667,12 +822,6 @@ pub struct AlbumCandidate {
     pub disambiguation: Option<String>,
     pub source_url: String,
     pub score: Option<i32>,
-}
-
-impl AlbumCandidate {
-    fn notes(&self) -> Option<String> {
-        Some(format!("Metadata: {}", self.source_url))
-    }
 }
 
 impl From<MusicBrainzReleaseGroup> for AlbumCandidate {
@@ -1200,6 +1349,64 @@ fn escape_lucene_phrase(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+fn is_local_cover_url(url: &str) -> bool {
+    url.starts_with(COVER_CACHE_URL_PREFIX) || url.starts_with("/uploads/")
+}
+
+fn is_remote_url(url: &str) -> bool {
+    url.starts_with("https://") || url.starts_with("http://")
+}
+
+fn cover_cache_key(value: &str) -> String {
+    value
+        .chars()
+        .filter_map(|character| {
+            if character.is_ascii_alphanumeric() || character == '-' || character == '_' {
+                Some(character)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn stable_url_cache_key(url: &str) -> String {
+    // FNV-1a keeps cache filenames stable without pulling an extra hashing dependency.
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in url.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("url-{hash:016x}")
+}
+
+fn cover_file_extension(content_type: Option<&str>, url: &str) -> Option<&'static str> {
+    let content_type = content_type
+        .and_then(|value| value.split(';').next())
+        .map(str::trim)
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+
+    match content_type.as_str() {
+        "image/jpeg" | "image/jpg" => return Some("jpg"),
+        "image/png" => return Some("png"),
+        "image/webp" => return Some("webp"),
+        "image/gif" => return Some("gif"),
+        _ => {}
+    }
+
+    Path::new(url.split('?').next().unwrap_or(url))
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .and_then(|extension| match extension.to_ascii_lowercase().as_str() {
+            "jpg" | "jpeg" => Some("jpg"),
+            "png" => Some("png"),
+            "webp" => Some("webp"),
+            "gif" => Some("gif"),
+            _ => None,
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1264,6 +1471,33 @@ mod tests {
             Some("{\"search_terms\":[\"A - B\"]}")
         );
         assert_eq!(json_payload(""), None);
+    }
+
+    #[test]
+    fn prepares_cover_cache_filenames() {
+        assert_eq!(
+            cover_cache_key("550e8400-e29b-41d4-a716-446655440000"),
+            "550e8400-e29b-41d4-a716-446655440000"
+        );
+        assert_eq!(cover_cache_key("../bad id!"), "badid");
+        assert_eq!(
+            stable_url_cache_key("https://example.com/cover.jpg"),
+            stable_url_cache_key("https://example.com/cover.jpg")
+        );
+    }
+
+    #[test]
+    fn detects_cacheable_cover_extensions() {
+        assert_eq!(cover_file_extension(Some("image/jpeg"), ""), Some("jpg"));
+        assert_eq!(
+            cover_file_extension(Some("image/png; charset=binary"), ""),
+            Some("png")
+        );
+        assert_eq!(
+            cover_file_extension(None, "https://example.com/cover.webp?size=small"),
+            Some("webp")
+        );
+        assert_eq!(cover_file_extension(Some("text/html"), "cover.txt"), None);
     }
 
     #[test]

@@ -9,6 +9,7 @@ A Rust + React web application for browsing and managing a family vinyl record l
 - **Authentication**: OIDC-based login integration
 - **Admin Controls**: 
   - Add individual vinyl records
+  - Edit album information from catalog cards
   - Upload cover images
   - Bulk import via CSV
   - Delete records
@@ -165,7 +166,7 @@ The frontend expects the following API endpoints:
 ### Admin Endpoints (require authentication)
 
 - `POST /api/admin/vinyls` - Create vinyl record
-- `PUT /api/admin/vinyls/:id` - Update vinyl record
+- `PUT /api/admin/vinyls/:id` - Update vinyl record. Omit unchanged fields; send `null` for optional fields (`release_year`, `notes`, `cover_image_url`) to clear them.
 - `DELETE /api/admin/vinyls/:id` - Delete vinyl record
 - `GET /api/admin/albums/search?artist=` - Search MusicBrainz albums by artist for manual selection
 - `POST /api/admin/vinyls/bulk` - Bulk import vinyls
@@ -181,17 +182,17 @@ The frontend expects the following API endpoints:
   id: string;
   artist: string;
   title: string;
-  release_year?: number;
-  notes?: string;
-  cover_image_url?: string;
+  release_year?: number | null;
+  notes?: string | null;
+  cover_image_url?: string | null;
   created_at: string;
   metadata_status: 'pending' | 'complete' | 'needs_choice' | 'not_found' | 'error' | 'disabled';
-  metadata_source?: string;
-  metadata_source_id?: string;
-  metadata_source_url?: string;
-  metadata_candidates?: string; // JSON array of possible matches when metadata_status is needs_choice
-  metadata_error?: string;
-  metadata_checked_at?: string;
+  metadata_source?: string | null;
+  metadata_source_id?: string | null;
+  metadata_source_url?: string | null;
+  metadata_candidates?: string | null; // JSON array of possible matches when metadata_status is needs_choice
+  metadata_error?: string | null;
+  metadata_checked_at?: string | null;
 }
 ```
 
@@ -261,7 +262,7 @@ Miles Davis,Kind of Blue,1959,Essential jazz album
 
 ## Album Cover Photo Import
 
-Admins can import a vinyl from a photo of the album cover. Gavin asks the configured vision provider to identify the cover image, resolves the detected album terms against MusicBrainz, and stores the clean official Cover Art Archive URL for the matched album instead of storing the uploaded photo.
+Admins can import a vinyl from a photo of the album cover. Gavin asks the configured vision provider to identify the cover image, resolves the detected album terms against MusicBrainz, downloads the official Cover Art Archive thumbnail into `UPLOAD_DIR/album-covers`, and stores the Gavin-served `/uploads/album-covers/...` URL for the matched album instead of storing the uploaded photo.
 
 MusicBrainz and Cover Art Archive are still used for free/open metadata and artwork. A freely available non-AI reverse-cover search API is not currently configured, so visual identification can use Gemini (`ALBUM_COVER_RECOGNITION_PROVIDER=gemini`) or ChatGPT/OpenAI (`ALBUM_COVER_RECOGNITION_PROVIDER=openai`). Because visual recognition can be wrong, Gavin always shows the uploaded cover next to candidate jackets and asks the admin to click the matching jacket before importing.
 
@@ -305,7 +306,7 @@ Key configuration options:
 
 - `AUTH_MODE` - Authentication mode: `oidc` (default, production) or `dev` (development)
 - `DATABASE_URL` - SQLite database path (default: `sqlite://data/gavin.db`)
-- `UPLOAD_DIR` - Directory for uploaded files (default: `data/uploads`)
+- `UPLOAD_DIR` - Directory for uploaded files and cached album-cover thumbnails (default: `data/uploads`)
 - `PUBLIC_DOMAIN` - Public domain used for default callback URLs (default: `gavin.restanrm.fr`)
 - `HOST` / `PORT` - Server bind address (default: `0.0.0.0:3000`)
 - `ALBUM_METADATA_ENABLED` - Enable internet album metadata enrichment (default: `true`)
@@ -321,8 +322,9 @@ Key configuration options:
 - `COVER_ART_ARCHIVE_BASE_URL` - Cover Art Archive API base URL (default: `https://coverartarchive.org`)
 
 **Album Metadata Enrichment**:
-- Creating a vinyl (single or bulk) performs a best-effort lookup via MusicBrainz and stores release year, cover art URL, source URL, and lookup status in SQLite.
-- Cover-photo imports use the configured visual recognition provider to find MusicBrainz candidates, then store the official Cover Art Archive image URL for the imported album.
+- Creating a vinyl (single or bulk) performs a best-effort lookup via MusicBrainz and stores release year, a local cover art URL when caching succeeds, source URL, and lookup status in SQLite.
+- Cover thumbnails discovered through MusicBrainz/Cover Art Archive, artist searches, cover-photo imports, or manual cover URLs are cached under `UPLOAD_DIR/album-covers` when possible so catalog thumbnails load from Gavin instead of the public internet.
+- Cover-photo imports use the configured visual recognition provider to find MusicBrainz candidates, then store a local Gavin-served copy of the official Cover Art Archive thumbnail for the imported album.
 - If multiple plausible album matches exist, Gavin marks the record as `needs_choice` and stores candidate choices instead of guessing.
 - On startup, Gavin launches an asynchronous background check that retries rows with pending, failed, or missing metadata lookups.
 

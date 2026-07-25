@@ -1,7 +1,7 @@
 //! Database models and operations
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use sqlx::{FromRow, SqlitePool};
 use uuid::Uuid;
 
@@ -38,14 +38,45 @@ pub struct CreateVinyl {
     pub cover_image_url: Option<String>,
 }
 
+/// A JSON patch field that can distinguish an omitted field from an explicit null.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PatchField<T> {
+    Missing,
+    Null,
+    Value(T),
+}
+
+impl<T> Default for PatchField<T> {
+    fn default() -> Self {
+        Self::Missing
+    }
+}
+
+impl<'de, T> Deserialize<'de> for PatchField<T>
+where
+    T: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(Option::<T>::deserialize(deserializer)?.map_or(Self::Null, Self::Value))
+    }
+}
+
 /// Input for updating a vinyl
 #[derive(Debug, Deserialize)]
 pub struct UpdateVinyl {
-    pub artist: Option<String>,
-    pub title: Option<String>,
-    pub release_year: Option<i32>,
-    pub notes: Option<String>,
-    pub cover_image_url: Option<String>,
+    #[serde(default)]
+    pub artist: PatchField<String>,
+    #[serde(default)]
+    pub title: PatchField<String>,
+    #[serde(default)]
+    pub release_year: PatchField<i32>,
+    #[serde(default)]
+    pub notes: PatchField<String>,
+    #[serde(default)]
+    pub cover_image_url: PatchField<String>,
 }
 
 /// Metadata fields updated by the album metadata enrichment job.
@@ -61,6 +92,14 @@ pub struct MetadataUpdate {
     pub metadata_candidates: Option<String>,
     pub metadata_error: Option<String>,
     pub metadata_checked_at: Option<DateTime<Utc>>,
+}
+
+/// Existing cover URL that should be cached locally by the metadata job.
+#[derive(Debug, FromRow)]
+pub struct VinylCoverImage {
+    pub id: String,
+    pub cover_image_url: String,
+    pub metadata_source_id: Option<String>,
 }
 
 impl MetadataUpdate {
@@ -218,38 +257,123 @@ impl Vinyl {
 
     /// Update a vinyl
     pub async fn update(pool: &SqlitePool, id: &str, input: UpdateVinyl) -> Result<Self> {
-        // First check if exists
-        let _existing = Self::get(pool, id).await?;
+        let existing = Self::get(pool, id).await?;
+
+        let artist = match input.artist {
+            PatchField::Missing => existing.artist.clone(),
+            PatchField::Null => {
+                return Err(AppError::InvalidInput(
+                    "artist and title are required".to_string(),
+                ))
+            }
+            PatchField::Value(value) => {
+                let trimmed = value.trim().to_string();
+                if trimmed.is_empty() {
+                    return Err(AppError::InvalidInput(
+                        "artist and title are required".to_string(),
+                    ));
+                }
+                trimmed
+            }
+        };
+
+        let title = match input.title {
+            PatchField::Missing => existing.title.clone(),
+            PatchField::Null => {
+                return Err(AppError::InvalidInput(
+                    "artist and title are required".to_string(),
+                ))
+            }
+            PatchField::Value(value) => {
+                let trimmed = value.trim().to_string();
+                if trimmed.is_empty() {
+                    return Err(AppError::InvalidInput(
+                        "artist and title are required".to_string(),
+                    ));
+                }
+                trimmed
+            }
+        };
+
+        let release_year = match input.release_year {
+            PatchField::Missing => existing.release_year,
+            PatchField::Null => None,
+            PatchField::Value(value) => Some(value),
+        };
+        let notes = match input.notes {
+            PatchField::Missing => existing.notes.clone(),
+            PatchField::Null => None,
+            PatchField::Value(value) => {
+                let trimmed = value.trim().to_string();
+                (!trimmed.is_empty()).then_some(trimmed)
+            }
+        };
+        let cover_image_url = match input.cover_image_url {
+            PatchField::Missing => existing.cover_image_url.clone(),
+            PatchField::Null => None,
+            PatchField::Value(value) => {
+                let trimmed = value.trim().to_string();
+                (!trimmed.is_empty()).then_some(trimmed)
+            }
+        };
+
+        let album_identity_changed = artist != existing.artist || title != existing.title;
+        let (
+            metadata_status,
+            metadata_source,
+            metadata_source_id,
+            metadata_source_url,
+            metadata_candidates,
+            metadata_error,
+            metadata_checked_at,
+        ) = if album_identity_changed {
+            ("pending".to_string(), None, None, None, None, None, None)
+        } else {
+            (
+                existing.metadata_status.clone(),
+                existing.metadata_source.clone(),
+                existing.metadata_source_id.clone(),
+                existing.metadata_source_url.clone(),
+                existing.metadata_candidates.clone(),
+                existing.metadata_error.clone(),
+                existing.metadata_checked_at,
+            )
+        };
 
         sqlx::query(
             r#"
             UPDATE vinyls
-            SET artist = COALESCE(?1, artist),
-                title = COALESCE(?2, title),
-                release_year = COALESCE(?3, release_year),
-                notes = COALESCE(?4, notes),
-                cover_image_url = COALESCE(?5, cover_image_url),
-                metadata_status = CASE
-                    WHEN ?1 IS NOT NULL OR ?2 IS NOT NULL THEN 'pending'
-                    ELSE metadata_status
-                END,
-                metadata_checked_at = CASE
-                    WHEN ?1 IS NOT NULL OR ?2 IS NOT NULL THEN NULL
-                    ELSE metadata_checked_at
-                END
-            WHERE id = ?6
+            SET artist = ?1,
+                title = ?2,
+                release_year = ?3,
+                notes = ?4,
+                cover_image_url = ?5,
+                metadata_status = ?6,
+                metadata_source = ?7,
+                metadata_source_id = ?8,
+                metadata_source_url = ?9,
+                metadata_candidates = ?10,
+                metadata_error = ?11,
+                metadata_checked_at = ?12
+            WHERE id = ?13
             "#,
         )
-        .bind(&input.artist)
-        .bind(&input.title)
-        .bind(input.release_year)
-        .bind(&input.notes)
-        .bind(&input.cover_image_url)
+        .bind(&artist)
+        .bind(&title)
+        .bind(release_year)
+        .bind(&notes)
+        .bind(&cover_image_url)
+        .bind(&metadata_status)
+        .bind(&metadata_source)
+        .bind(&metadata_source_id)
+        .bind(&metadata_source_url)
+        .bind(&metadata_candidates)
+        .bind(&metadata_error)
+        .bind(metadata_checked_at)
         .bind(id)
         .execute(pool)
         .await?;
 
-        // Fetch updated record
         Self::get(pool, id).await
     }
 
@@ -290,6 +414,53 @@ impl Vinyl {
         }
 
         Ok(())
+    }
+
+    /// Update only the stored cover image URL.
+    pub async fn update_cover_image_url(
+        pool: &SqlitePool,
+        id: &str,
+        cover_image_url: &str,
+    ) -> Result<()> {
+        let result = sqlx::query(
+            r#"
+            UPDATE vinyls
+            SET cover_image_url = ?1
+            WHERE id = ?2
+            "#,
+        )
+        .bind(cover_image_url)
+        .bind(id)
+        .execute(pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        Ok(())
+    }
+
+    /// Existing external cover URLs that can be downloaded to the local upload cache.
+    pub async fn list_external_cover_images(
+        pool: &SqlitePool,
+        limit: i64,
+    ) -> Result<Vec<VinylCoverImage>> {
+        let covers = sqlx::query_as::<_, VinylCoverImage>(
+            r#"
+            SELECT id, cover_image_url, metadata_source_id
+            FROM vinyls
+            WHERE cover_image_url IS NOT NULL
+              AND (cover_image_url LIKE 'https://%' OR cover_image_url LIKE 'http://%')
+            ORDER BY created_at
+            LIMIT ?1
+            "#,
+        )
+        .bind(limit)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(covers)
     }
 
     /// IDs for vinyls that need a best-effort metadata lookup.
@@ -506,11 +677,11 @@ mod tests {
             &pool,
             &vinyl.id,
             UpdateVinyl {
-                artist: Some("Updated Artist".to_string()),
-                title: None,
-                release_year: Some(2020),
-                notes: None,
-                cover_image_url: None,
+                artist: PatchField::Value("Updated Artist".to_string()),
+                title: PatchField::Missing,
+                release_year: PatchField::Value(2020),
+                notes: PatchField::Missing,
+                cover_image_url: PatchField::Missing,
             },
         )
         .await
@@ -520,6 +691,57 @@ mod tests {
         assert_eq!(updated.title, "Album"); // Unchanged
         assert_eq!(updated.release_year, Some(2020));
         assert_eq!(updated.metadata_status, "pending");
+    }
+
+    #[tokio::test]
+    async fn test_update_vinyl_clears_nullable_fields() {
+        let pool = setup_test_db().await;
+
+        let vinyl = Vinyl::create(
+            &pool,
+            CreateVinyl {
+                artist: "Test".to_string(),
+                title: "Album".to_string(),
+                release_year: Some(1999),
+                notes: Some("Original notes".to_string()),
+                cover_image_url: Some("https://example.com/cover.jpg".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+
+        let updated = Vinyl::update(
+            &pool,
+            &vinyl.id,
+            UpdateVinyl {
+                artist: PatchField::Missing,
+                title: PatchField::Missing,
+                release_year: PatchField::Null,
+                notes: PatchField::Null,
+                cover_image_url: PatchField::Value("".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(updated.release_year, None);
+        assert_eq!(updated.notes, None);
+        assert_eq!(updated.cover_image_url, None);
+    }
+
+    #[tokio::test]
+    async fn test_update_vinyl_accepts_json_nulls() {
+        let input: UpdateVinyl = serde_json::from_value(serde_json::json!({
+            "release_year": null,
+            "notes": null,
+            "cover_image_url": null
+        }))
+        .unwrap();
+
+        assert_eq!(input.release_year, PatchField::Null);
+        assert_eq!(input.notes, PatchField::Null);
+        assert_eq!(input.cover_image_url, PatchField::Null);
+        assert_eq!(input.artist, PatchField::Missing);
     }
 
     #[tokio::test]

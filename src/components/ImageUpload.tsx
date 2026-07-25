@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { uploadImage } from '../utils/api';
 
 interface ImageUploadProps {
+  id?: string;
   onUploadComplete: (url: string) => void;
 }
 
-export function ImageUpload({ onUploadComplete }: ImageUploadProps) {
+export function ImageUpload({ id = 'cover-image', onUploadComplete }: ImageUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,11 +41,11 @@ export function ImageUpload({ onUploadComplete }: ImageUploadProps) {
 
   return (
     <div className="image-upload">
-      <label htmlFor="cover-image" className="form-label">
+      <label htmlFor={id} className="form-label">
         Cover Image
       </label>
       <input
-        id="cover-image"
+        id={id}
         type="file"
         accept="image/*"
         onChange={handleFileChange}

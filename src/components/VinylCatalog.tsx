@@ -53,6 +53,7 @@ export function VinylCatalog({ vinyls, loading, error, isAdmin, onVinylsUpdate }
               vinyl={vinyl}
               isAdmin={isAdmin}
               onDelete={isAdmin ? handleDelete : undefined}
+              onUpdate={isAdmin ? onVinylsUpdate : undefined}
             />
           </div>
         ))}

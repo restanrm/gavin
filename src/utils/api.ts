@@ -1,6 +1,13 @@
 import type { Vinyl, User, UploadResponse, BulkImportItem, AlbumCandidate, CoverImportResponse } from '../types';
 
 type VinylInput = Pick<Vinyl, 'artist' | 'title' | 'release_year' | 'notes' | 'cover_image_url'>;
+type VinylUpdateInput = Partial<{
+  artist: string;
+  title: string;
+  release_year: number | null;
+  notes: string | null;
+  cover_image_url: string | null;
+}>;
 
 const BASE_URL = '/api';
 
@@ -54,7 +61,7 @@ export async function createVinyl(vinyl: VinylInput): Promise<Vinyl> {
   });
 }
 
-export async function updateVinyl(id: string, vinyl: Partial<VinylInput>): Promise<Vinyl> {
+export async function updateVinyl(id: string, vinyl: VinylUpdateInput): Promise<Vinyl> {
   return fetchJSON<Vinyl>(`${BASE_URL}/admin/vinyls/${id}`, {
     method: 'PUT',
     body: JSON.stringify(vinyl),

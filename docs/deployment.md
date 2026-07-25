@@ -381,7 +381,7 @@ git commit -m "Add sealed secrets for gavin"
 | `HOST` | No | `0.0.0.0` | Listen address |
 | `PORT` | No | `3000` | Listen port |
 | `DATABASE_URL` | No | `sqlite:///app/data/gavin.db` | Database connection string |
-| `UPLOAD_DIR` | No | `/app/data/uploads` | Upload directory path |
+| `UPLOAD_DIR` | No | `/app/data/uploads` | Upload directory path; cached album-cover thumbnails are stored in `album-covers/` below this directory |
 | `FRONTEND_DIR` | No | `/app/dist` | Frontend static files path |
 | `PUBLIC_DOMAIN` | No | `gavin.restanrm.fr` | Public domain used for default callback URLs |
 | `AUTH_MODE` | No | `oidc` | `oidc` for production, `dev` for local auth bypass |

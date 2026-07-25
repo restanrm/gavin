@@ -11,7 +11,7 @@ use tower_sessions::Session;
 
 use crate::{
     album_metadata::{AlbumCandidate, CoverImageAnalysis},
-    db::{BulkCreateRequest, CreateVinyl, MetadataUpdate, UpdateVinyl, Vinyl},
+    db::{BulkCreateRequest, CreateVinyl, MetadataUpdate, PatchField, UpdateVinyl, Vinyl},
     error::{AppError, Result},
     routes::AppState,
 };
@@ -26,9 +26,10 @@ async fn require_admin(state: &AppState, session: &Session) -> Result<()> {
 pub async fn create_vinyl(
     State(state): State<AppState>,
     session: Session,
-    Json(input): Json<CreateVinyl>,
+    Json(mut input): Json<CreateVinyl>,
 ) -> Result<Json<Vinyl>> {
     require_admin(&state, &session).await?;
+    localize_create_cover(&state, &mut input).await;
     let vinyl = Vinyl::create(&state.pool, input).await?;
     let vinyl = state
         .metadata_client
@@ -45,6 +46,7 @@ pub async fn update_vinyl(
     Json(input): Json<UpdateVinyl>,
 ) -> Result<Json<Vinyl>> {
     require_admin(&state, &session).await?;
+    let input = localize_update_cover(&state, input).await;
     let vinyl = Vinyl::update(&state.pool, &id, input).await?;
     Ok(Json(vinyl))
 }
@@ -76,6 +78,8 @@ pub async fn bulk_create_vinyls(
             tokio::time::sleep(Duration::from_millis(1100)).await;
         }
 
+        let mut item = item;
+        localize_create_cover(&state, &mut item).await;
         let vinyl = Vinyl::create(&state.pool, item).await?;
         let vinyl = state
             .metadata_client
@@ -231,6 +235,38 @@ pub async fn upload_file(
     Ok(Json(UploadResponse { url }))
 }
 
+async fn localize_create_cover(state: &AppState, input: &mut CreateVinyl) {
+    if let Some(cover_url) = input.cover_image_url.as_deref() {
+        input.cover_image_url = state.metadata_client.local_cover_url(None, cover_url).await;
+    }
+}
+
+async fn localize_update_cover(state: &AppState, input: UpdateVinyl) -> UpdateVinyl {
+    let UpdateVinyl {
+        artist,
+        title,
+        release_year,
+        notes,
+        cover_image_url,
+    } = input;
+
+    let cover_image_url = match cover_image_url {
+        PatchField::Value(value) => match state.metadata_client.local_cover_url(None, &value).await {
+            Some(local_url) => PatchField::Value(local_url),
+            None => PatchField::Value(value),
+        },
+        other => other,
+    };
+
+    UpdateVinyl {
+        artist,
+        title,
+        release_year,
+        notes,
+        cover_image_url,
+    }
+}
+
 async fn build_cover_import_response(
     _state: &AppState,
     analysis: CoverImageAnalysis,
@@ -264,6 +300,13 @@ async fn create_vinyl_from_candidate(
     }
 
     let notes = Some(format!("Metadata: {}", candidate.source_url));
+    let cover_image_url = match candidate.cover_image_url.as_deref() {
+        Some(url) => state
+            .metadata_client
+            .local_cover_url(Some(&candidate.id), url)
+            .await,
+        None => None,
+    };
     let vinyl = Vinyl::create(
         &state.pool,
         CreateVinyl {
@@ -271,7 +314,7 @@ async fn create_vinyl_from_candidate(
             title: candidate.title.clone(),
             release_year: candidate.release_year,
             notes: notes.clone(),
-            cover_image_url: candidate.cover_image_url.clone(),
+            cover_image_url: cover_image_url.clone(),
         },
     )
     .await?;
@@ -282,7 +325,7 @@ async fn create_vinyl_from_candidate(
         MetadataUpdate {
             release_year: candidate.release_year,
             notes,
-            cover_image_url: candidate.cover_image_url,
+            cover_image_url,
             metadata_status: "complete".to_string(),
             metadata_source: Some(candidate.source),
             metadata_source_id: Some(candidate.id),

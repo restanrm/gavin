@@ -2,17 +2,17 @@ export interface Vinyl {
   id: string;
   artist: string;
   title: string;
-  release_year?: number;
-  notes?: string;
-  cover_image_url?: string;
+  release_year?: number | null;
+  notes?: string | null;
+  cover_image_url?: string | null;
   created_at: string;
   metadata_status: 'pending' | 'complete' | 'needs_choice' | 'not_found' | 'error' | 'disabled';
-  metadata_source?: string;
-  metadata_source_id?: string;
-  metadata_source_url?: string;
-  metadata_candidates?: string;
-  metadata_error?: string;
-  metadata_checked_at?: string;
+  metadata_source?: string | null;
+  metadata_source_id?: string | null;
+  metadata_source_url?: string | null;
+  metadata_candidates?: string | null;
+  metadata_error?: string | null;
+  metadata_checked_at?: string | null;
 }
 
 export interface User {
