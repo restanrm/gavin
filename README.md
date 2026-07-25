@@ -5,6 +5,7 @@ A Rust + React web application for browsing and managing a family vinyl record l
 ## Features
 
 - **Public Catalog**: Browse vinyl records in a responsive grid layout
+- **Library Stats**: Compact footer counters for albums, artists, year range, cover count, and admin metadata-review count
 - **Search**: Real-time search with debouncing for artist and title
 - **Authentication**: OIDC-based login integration
 - **Admin Controls**: 

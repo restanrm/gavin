@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Footer library stats counter** showing compact album, artist, year range, cover, and admin metadata-review counts at the bottom of the page.
+
 ## [0.2.3] - 2026-07-25
 
 ### Added

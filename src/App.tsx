@@ -7,6 +7,7 @@ import { ThemeToggle } from './components/ThemeToggle';
 import { SearchBar } from './components/SearchBar';
 import { VinylCatalog } from './components/VinylCatalog';
 import { AdminPanel } from './components/AdminPanel';
+import { LibraryStats } from './components/LibraryStats';
 import './App.css';
 
 function App() {
@@ -15,15 +16,28 @@ function App() {
   
   const { isAuthenticated, user, loading: authLoading, refreshAuth } = useAuth();
   const { vinyls, loading: vinylsLoading, error, refetch } = useVinyls(debouncedSearch);
+  const {
+    vinyls: libraryVinyls,
+    loading: libraryStatsLoading,
+    error: libraryStatsError,
+    refetch: refetchLibraryStats,
+  } = useVinyls();
 
   const handleVinylsUpdate = () => {
     refetch();
+    refetchLibraryStats();
   };
 
   const handleLogoutComplete = () => {
     void refreshAuth();
     refetch();
+    refetchLibraryStats();
   };
+
+  const searchIsActive = debouncedSearch.trim().length > 0;
+  const statsVinyls = searchIsActive ? libraryVinyls : vinyls;
+  const statsLoading = searchIsActive ? libraryStatsLoading : vinylsLoading;
+  const statsError = searchIsActive ? libraryStatsError : error;
 
   return (
     <div className="app">
@@ -71,6 +85,12 @@ function App() {
       </main>
 
       <footer className="app-footer">
+        <LibraryStats
+          vinyls={statsVinyls}
+          loading={statsLoading}
+          error={statsError}
+          isAdmin={isAuthenticated}
+        />
         <p>
           Gavin Vinyl Library &copy; {new Date().getFullYear()}
         </p>

@@ -957,6 +957,9 @@
 
 /* Footer */
 .app-footer {
+  display: grid;
+  justify-items: center;
+  gap: var(--spacing-sm);
   margin-top: auto;
   padding: var(--spacing-lg);
   text-align: center;
@@ -964,6 +967,33 @@
   border-top: 1px solid var(--color-border);
   color: var(--color-text-muted);
   font-size: 0.875rem;
+}
+
+.library-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--spacing-xs);
+}
+
+.library-stat {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  padding: 0.25rem 0.625rem;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.library-stat-review {
+  color: var(--color-warning-text);
+  background-color: var(--color-warning-bg);
+  border-color: color-mix(in srgb, var(--color-warning-text) 35%, transparent);
 }
 
 /* Responsive adjustments */
