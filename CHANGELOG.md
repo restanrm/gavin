@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-07-25
+
 ### Added
 - **Admin metadata review highlighting** that visually flags albums with incomplete metadata in the catalog and edit dialog so admins can quickly spot records needing attention.
 - **Clickable metadata candidate selection** in album edit mode, letting admins apply a reviewed MusicBrainz match to an existing vinyl instead of only opening the source information link.
@@ -186,6 +188,7 @@ The workflow:
 
 For local preparation only, use `VERSION=0.2.0 mise run release:prepare`.
 
-[Unreleased]: https://github.com/restanrm/gavin/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/restanrm/gavin/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/restanrm/gavin/compare/v0.2.1...v0.2.3
 [0.2.1]: https://github.com/restanrm/gavin/compare/v0.1.0...v0.2.1
 [0.1.0]: https://github.com/restanrm/gavin/releases/tag/v0.1.0

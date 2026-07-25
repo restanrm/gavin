@@ -2,8 +2,8 @@ apiVersion: v2
 name: gavin
 description: A Helm chart for Gavin Vinyl Library application
 type: application
-version: 0.2.2
-appVersion: "v0.2.2"
+version: 0.2.3
+appVersion: "v0.2.3"
 keywords:
   - vinyl
   - music
