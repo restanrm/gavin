@@ -1,0 +1,17 @@
+apiVersion: v2
+name: gavin
+description: A Helm chart for Gavin Vinyl Library application
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - vinyl
+  - music
+  - catalog
+  - rust
+  - react
+maintainers:
+  - name: Gavin Team
+home: https://github.com/restanrm/gavin
+sources:
+  - https://github.com/restanrm/gavin

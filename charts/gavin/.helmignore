@@ -1,0 +1,39 @@
+# Patterns to ignore when packaging Helm charts
+
+# Version control
+.git/
+.gitignore
+
+# Development files
+*.md.bak
+*.yaml.bak
+*.swp
+*.swo
+*~
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Testing
+test/
+tests/
+
+# Examples and documentation (keep README.md)
+examples/
+docs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Values files (included explicitly in chart)
+# We want to keep values.yaml, values-*.yaml
+# But exclude any local overrides
+values.local.yaml
+my-values.yaml
+override-*.yaml

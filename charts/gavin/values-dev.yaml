@@ -1,0 +1,55 @@
+# Development/Local values for Gavin
+# Minimal configuration for local testing
+
+image:
+  repository: gavin
+  tag: latest
+  pullPolicy: Never  # Use local images
+
+replicaCount: 1
+
+domain: gavin.local
+
+# For development, you can use inline secrets (NOT FOR PRODUCTION!)
+existingSecret: ""
+secrets:
+  oidcIssuerUrl: "https://your-dev-oidc.com"
+  oidcClientId: "dev-client-id"
+  oidcClientSecret: "dev-client-secret"
+  oidcRedirectUrl: "http://localhost:3000/api/auth/callback"
+  sessionSecret: "dev-secret-not-secure-at-least-64-characters-long-for-session-key"
+
+# Local ingress or port-forward
+ingress:
+  enabled: false
+
+service:
+  type: NodePort
+  port: 80
+
+# Smaller resources for local dev
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+# Local storage
+persistence:
+  enabled: true
+  storageClass: ""  # Use default storage class
+  size: 2Gi
+
+# Development config
+config:
+  rustLog: "debug,gavin=debug,tower_http=debug"
+  cookieSecure: "false"
+  authMode: "dev"
+
+autoscaling:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: false

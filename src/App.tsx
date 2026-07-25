@@ -1,0 +1,78 @@
+import { useState } from 'react';
+import { useAuth } from './hooks/useAuth';
+import { useVinyls } from './hooks/useVinyls';
+import { useDebounce } from './hooks/useDebounce';
+import { LoginButton } from './components/LoginButton';
+import { SearchBar } from './components/SearchBar';
+import { VinylCatalog } from './components/VinylCatalog';
+import { AdminPanel } from './components/AdminPanel';
+import './App.css';
+
+function App() {
+  const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 300);
+  
+  const { isAuthenticated, user, loading: authLoading, refreshAuth } = useAuth();
+  const { vinyls, loading: vinylsLoading, error, refetch } = useVinyls(debouncedSearch);
+
+  const handleVinylsUpdate = () => {
+    refetch();
+  };
+
+  const handleLogoutComplete = () => {
+    void refreshAuth();
+    refetch();
+  };
+
+  return (
+    <div className="app">
+      <header className="app-header">
+        <div className="header-content">
+          <div className="brand" aria-label="Gavin Vinyl Library">
+            <img src="/logo.svg" alt="" className="brand-logo" />
+            <h1>Gavin Vinyl Library</h1>
+          </div>
+          {!authLoading && (
+            <LoginButton
+              isAuthenticated={isAuthenticated}
+              userName={user?.name || user?.email}
+              onLogoutComplete={handleLogoutComplete}
+            />
+          )}
+        </div>
+      </header>
+
+      <main className="app-main">
+        <div className="search-section">
+          <SearchBar
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Search by artist or title..."
+          />
+        </div>
+
+        {isAuthenticated && (
+          <AdminPanel onVinylsUpdate={handleVinylsUpdate} />
+        )}
+
+        <section className="catalog-section" aria-label="Vinyl catalog">
+          <VinylCatalog
+            vinyls={vinyls}
+            loading={vinylsLoading}
+            error={error}
+            isAdmin={isAuthenticated}
+            onVinylsUpdate={handleVinylsUpdate}
+          />
+        </section>
+      </main>
+
+      <footer className="app-footer">
+        <p>
+          Gavin Vinyl Library &copy; {new Date().getFullYear()}
+        </p>
+      </footer>
+    </div>
+  );
+}
+
+export default App;

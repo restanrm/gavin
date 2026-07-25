@@ -1,0 +1,65 @@
+# Build artifacts
+target/
+dist/
+node_modules/
+
+# Data directories
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Version control
+.git/
+.jj/
+.gitignore
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+!README.md
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Charts and deployment
+charts/
+*.yaml
+*.yml
+!docker-compose.yml
+
+# Test files
+tests/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Coverage
+coverage/
+.nyc_output/

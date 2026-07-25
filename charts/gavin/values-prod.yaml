@@ -1,0 +1,117 @@
+# Production values for Gavin
+# Override these values with your production configuration
+
+image:
+  repository: your-registry.io/gavin
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+# SQLite is intentionally used for this app; keep one writer replica.
+replicaCount: 1
+
+domain: gavin.restanrm.fr
+
+# Use existing secret managed by external-secrets or sealed-secrets
+existingSecret: "gavin-secrets"
+
+# Enable ingress with TLS
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
+  hosts:
+    - host: "" # empty uses domain
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: gavin-tls
+      hosts:
+        - "" # empty uses domain
+
+# Production persistence configuration
+persistence:
+  enabled: true
+  storageClass: "fast-ssd"  # Use your cluster's storage class
+  size: 20Gi
+  accessModes:
+    - ReadWriteOnce
+
+# Production resource limits
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 512Mi
+
+# Health checks for production
+livenessProbe:
+  httpGet:
+    path: /api/health
+    port: http
+  initialDelaySeconds: 15
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /api/health
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Keep autoscaling disabled with SQLite. Revisit if the database moves to PostgreSQL.
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 1
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+# Production affinity rules (spread across nodes)
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - gavin
+          topologyKey: kubernetes.io/hostname
+
+# Security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+    - ALL
+
+# Production config
+config:
+  rustLog: "info,gavin=info,tower_http=info"
+  cookieSecure: "true"
+  authMode: "oidc"

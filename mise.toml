@@ -1,0 +1,41 @@
+[tasks.dev]
+description = "Start the local Gavin dev stack (Rust backend in AUTH_MODE=dev + Vite frontend)"
+run = "./scripts/dev.sh"
+
+[tasks."dev:backend"]
+description = "Start only the Rust backend with development auth"
+run = "mkdir -p data/uploads && AUTH_MODE=dev COOKIE_SECURE=false HOST=127.0.0.1 PORT=3000 DATABASE_URL=sqlite://data/gavin.db UPLOAD_DIR=data/uploads FRONTEND_DIR=dist PUBLIC_DOMAIN=localhost:3000 RUST_LOG=info,gavin=debug,tower_http=debug cargo run"
+
+[tasks."dev:frontend"]
+description = "Start only the Vite frontend (API proxy targets http://localhost:3000)"
+run = "npm run dev -- --host 127.0.0.1"
+
+[tasks.setup]
+description = "Install frontend dependencies"
+run = "npm ci"
+
+[tasks.test]
+description = "Run backend and frontend tests"
+run = [
+  "cargo test",
+  "npm test -- --run",
+]
+
+[tasks.build]
+description = "Build frontend and backend"
+run = [
+  "npm run build",
+  "cargo build",
+]
+
+[tasks."container:build"]
+description = "Build the production container image with Podman"
+run = "podman build -t gavin:latest ."
+
+[tasks."k3d:dev"]
+description = "Build with Podman and deploy Gavin to a local k3d cluster in AUTH_MODE=dev"
+run = "./scripts/k3d-dev.sh"
+
+[tasks."k3d:delete"]
+description = "Delete the local Gavin k3d test cluster"
+run = "DOCKER_HOST=unix://${XDG_RUNTIME_DIR}/podman/podman.sock k3d cluster delete gavin-test"

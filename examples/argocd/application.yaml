@@ -1,0 +1,88 @@
+---
+# Basic ArgoCD Application for Gavin Vinyl Library
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gavin
+  namespace: argocd
+  # Add finalizer to ensure proper cleanup
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  # Optional: add labels for organization
+  labels:
+    app: gavin
+    environment: production
+spec:
+  # Project to deploy into
+  project: default
+  
+  # Source repository configuration
+  source:
+    repoURL: https://github.com/restanrm/gavin
+    targetRevision: main  # or specific tag like v0.1.0
+    path: charts/gavin
+    
+    # Helm-specific configuration
+    helm:
+      # Use production values
+      valueFiles:
+        - values-prod.yaml
+      
+      # Override specific values
+      parameters:
+        - name: image.repository
+          value: "your-registry.io/gavin"
+        - name: image.tag
+          value: "0.1.0"
+        - name: existingSecret
+          value: "gavin-secrets"
+        - name: ingress.hosts[0].host
+          value: "gavin.restanrm.fr"
+        - name: persistence.storageClass
+          value: "fast-ssd"
+      
+      # Optional: pass values directly
+      # values: |
+      #   domain: gavin.restanrm.fr
+      #   resources:
+      #     limits:
+      #       memory: 1Gi
+  
+  # Destination cluster and namespace
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gavin
+  
+  # Sync policy and options
+  syncPolicy:
+    # Automated sync configuration
+    automated:
+      prune: true        # Remove resources not in git
+      selfHeal: true     # Revert manual changes
+      allowEmpty: false  # Don't sync if repo is empty
+    
+    # Sync options
+    syncOptions:
+      - CreateNamespace=true      # Auto-create namespace
+      - ApplyOutOfSyncOnly=true   # Only apply changed resources
+      - PruneLast=true            # Delete resources after new ones are healthy
+    
+    # Retry configuration
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  # Ignore differences for specific fields
+  # (useful for resources modified by controllers)
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas  # If using HPA
+    - group: apps
+      kind: StatefulSet
+      jsonPointers:
+        - /spec/volumeClaimTemplates
