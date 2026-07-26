@@ -14,6 +14,7 @@ pub struct Vinyl {
     pub artist: String,
     pub title: String,
     pub release_year: Option<i32>,
+    pub genre: Option<String>,
     pub notes: Option<String>,
     pub cover_image_url: Option<String>,
     pub created_at: DateTime<Utc>,
@@ -33,6 +34,7 @@ pub struct CreateVinyl {
     pub title: String,
     #[serde(alias = "year")]
     pub release_year: Option<i32>,
+    pub genre: Option<String>,
     pub notes: Option<String>,
     #[serde(alias = "cover_url")]
     pub cover_image_url: Option<String>,
@@ -74,6 +76,8 @@ pub struct UpdateVinyl {
     #[serde(default)]
     pub release_year: PatchField<i32>,
     #[serde(default)]
+    pub genre: PatchField<String>,
+    #[serde(default)]
     pub notes: PatchField<String>,
     #[serde(default)]
     pub cover_image_url: PatchField<String>,
@@ -83,6 +87,7 @@ pub struct UpdateVinyl {
 #[derive(Debug)]
 pub struct MetadataUpdate {
     pub release_year: Option<i32>,
+    pub genre: Option<String>,
     pub notes: Option<String>,
     pub cover_image_url: Option<String>,
     pub metadata_status: String,
@@ -106,6 +111,7 @@ impl MetadataUpdate {
     pub fn error(status: impl Into<String>, error: impl Into<String>) -> Self {
         Self {
             release_year: None,
+            genre: None,
             notes: None,
             cover_image_url: None,
             metadata_status: status.into(),
@@ -138,7 +144,7 @@ impl Vinyl {
                 // Empty search, fetch all
                 sqlx::query_as::<_, Vinyl>(
                     r#"
-                    SELECT id, artist, title, release_year, notes, cover_image_url, created_at,
+                    SELECT id, artist, title, release_year, genre, notes, cover_image_url, created_at,
                            metadata_status, metadata_source, metadata_source_id, metadata_source_url,
                            metadata_candidates, metadata_error, metadata_checked_at
                     FROM vinyls
@@ -155,14 +161,16 @@ impl Vinyl {
 
                 sqlx::query_as::<_, Vinyl>(
                     r#"
-                    SELECT id, artist, title, release_year, notes, cover_image_url, created_at,
+                    SELECT id, artist, title, release_year, genre, notes, cover_image_url, created_at,
                            metadata_status, metadata_source, metadata_source_id, metadata_source_url,
                            metadata_candidates, metadata_error, metadata_checked_at
                     FROM vinyls
                     WHERE LOWER(artist) LIKE ?1
                        OR LOWER(title) LIKE ?1
+                       OR LOWER(genre) LIKE ?1
                        OR REPLACE(LOWER(artist), ' ', '') LIKE ?2
                        OR REPLACE(LOWER(title), ' ', '') LIKE ?2
+                       OR REPLACE(LOWER(genre), ' ', '') LIKE ?2
                     ORDER BY LOWER(artist), LOWER(title)
                     "#,
                 )
@@ -174,7 +182,7 @@ impl Vinyl {
         } else {
             sqlx::query_as::<_, Vinyl>(
                 r#"
-                SELECT id, artist, title, release_year, notes, cover_image_url, created_at,
+                SELECT id, artist, title, release_year, genre, notes, cover_image_url, created_at,
                        metadata_status, metadata_source, metadata_source_id, metadata_source_url,
                        metadata_candidates, metadata_error, metadata_checked_at
                 FROM vinyls
@@ -186,7 +194,15 @@ impl Vinyl {
         };
 
         if missing_metadata_only {
-            vinyls.retain(|vinyl| vinyl.metadata_status != "complete" && vinyl.metadata_status != "disabled");
+            vinyls.retain(|vinyl| {
+                (vinyl.metadata_status != "complete" && vinyl.metadata_status != "disabled")
+                    || vinyl
+                        .genre
+                        .as_deref()
+                        .map(str::trim)
+                        .unwrap_or_default()
+                        .is_empty()
+            });
         }
 
         Ok(vinyls)
@@ -196,7 +212,7 @@ impl Vinyl {
     pub async fn get(pool: &SqlitePool, id: &str) -> Result<Self> {
         let vinyl = sqlx::query_as::<_, Vinyl>(
             r#"
-            SELECT id, artist, title, release_year, notes, cover_image_url, created_at,
+            SELECT id, artist, title, release_year, genre, notes, cover_image_url, created_at,
                    metadata_status, metadata_source, metadata_source_id, metadata_source_url,
                    metadata_candidates, metadata_error, metadata_checked_at
             FROM vinyls
@@ -229,15 +245,16 @@ impl Vinyl {
         sqlx::query(
             r#"
             INSERT INTO vinyls (
-                id, artist, title, release_year, notes, cover_image_url, created_at, metadata_status
+                id, artist, title, release_year, genre, notes, cover_image_url, created_at, metadata_status
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
             "#,
         )
         .bind(&id)
         .bind(&artist)
         .bind(&title)
         .bind(input.release_year)
+        .bind(&input.genre)
         .bind(&input.notes)
         .bind(&input.cover_image_url)
         .bind(now)
@@ -250,6 +267,7 @@ impl Vinyl {
             artist,
             title,
             release_year: input.release_year,
+            genre: input.genre,
             notes: input.notes,
             cover_image_url: input.cover_image_url,
             created_at: now,
@@ -308,6 +326,14 @@ impl Vinyl {
             PatchField::Null => None,
             PatchField::Value(value) => Some(value),
         };
+        let genre = match input.genre {
+            PatchField::Missing => existing.genre.clone(),
+            PatchField::Null => None,
+            PatchField::Value(value) => {
+                let trimmed = value.trim().to_string();
+                (!trimmed.is_empty()).then_some(trimmed)
+            }
+        };
         let notes = match input.notes {
             PatchField::Missing => existing.notes.clone(),
             PatchField::Null => None,
@@ -354,21 +380,23 @@ impl Vinyl {
             SET artist = ?1,
                 title = ?2,
                 release_year = ?3,
-                notes = ?4,
-                cover_image_url = ?5,
-                metadata_status = ?6,
-                metadata_source = ?7,
-                metadata_source_id = ?8,
-                metadata_source_url = ?9,
-                metadata_candidates = ?10,
-                metadata_error = ?11,
-                metadata_checked_at = ?12
-            WHERE id = ?13
+                genre = ?4,
+                notes = ?5,
+                cover_image_url = ?6,
+                metadata_status = ?7,
+                metadata_source = ?8,
+                metadata_source_id = ?9,
+                metadata_source_url = ?10,
+                metadata_candidates = ?11,
+                metadata_error = ?12,
+                metadata_checked_at = ?13
+            WHERE id = ?14
             "#,
         )
         .bind(&artist)
         .bind(&title)
         .bind(release_year)
+        .bind(&genre)
         .bind(&notes)
         .bind(&cover_image_url)
         .bind(&metadata_status)
@@ -391,19 +419,21 @@ impl Vinyl {
             r#"
             UPDATE vinyls
             SET release_year = COALESCE(?1, release_year),
-                notes = COALESCE(?2, notes),
-                cover_image_url = COALESCE(?3, cover_image_url),
-                metadata_status = ?4,
-                metadata_source = ?5,
-                metadata_source_id = ?6,
-                metadata_source_url = ?7,
-                metadata_candidates = ?8,
-                metadata_error = ?9,
-                metadata_checked_at = ?10
-            WHERE id = ?11
+                genre = COALESCE(?2, genre),
+                notes = COALESCE(?3, notes),
+                cover_image_url = COALESCE(?4, cover_image_url),
+                metadata_status = ?5,
+                metadata_source = ?6,
+                metadata_source_id = ?7,
+                metadata_source_url = ?8,
+                metadata_candidates = ?9,
+                metadata_error = ?10,
+                metadata_checked_at = ?11
+            WHERE id = ?12
             "#,
         )
         .bind(input.release_year)
+        .bind(&input.genre)
         .bind(&input.notes)
         .bind(&input.cover_image_url)
         .bind(&input.metadata_status)
@@ -479,6 +509,8 @@ impl Vinyl {
             FROM vinyls
             WHERE metadata_checked_at IS NULL
                OR metadata_status IN ('pending', 'error', 'not_found')
+               OR genre IS NULL
+               OR TRIM(genre) = ''
             ORDER BY created_at
             LIMIT ?1
             "#,
@@ -520,6 +552,7 @@ mod tests {
                 artist TEXT NOT NULL,
                 title TEXT NOT NULL,
                 release_year INTEGER,
+                genre TEXT,
                 notes TEXT,
                 cover_image_url TEXT,
                 created_at TEXT NOT NULL,
@@ -548,6 +581,7 @@ mod tests {
             artist: "Pink Floyd".to_string(),
             title: "The Dark Side of the Moon".to_string(),
             release_year: Some(1973),
+            genre: None,
             notes: None,
             cover_image_url: None,
         };
@@ -588,6 +622,7 @@ mod tests {
                 artist: "The Beatles".to_string(),
                 title: "Abbey Road".to_string(),
                 release_year: Some(1969),
+                genre: None,
                 notes: None,
                 cover_image_url: None,
             },
@@ -601,6 +636,7 @@ mod tests {
                 artist: "Pink Floyd".to_string(),
                 title: "The Wall".to_string(),
                 release_year: Some(1979),
+                genre: None,
                 notes: None,
                 cover_image_url: None,
             },
@@ -638,6 +674,7 @@ mod tests {
                 artist: "Zeppelin".to_string(),
                 title: "IV".to_string(),
                 release_year: None,
+                genre: None,
                 notes: None,
                 cover_image_url: None,
             },
@@ -651,6 +688,7 @@ mod tests {
                 artist: "Beatles".to_string(),
                 title: "White Album".to_string(),
                 release_year: None,
+                genre: None,
                 notes: None,
                 cover_image_url: None,
             },
@@ -674,6 +712,7 @@ mod tests {
                 artist: "Pending Artist".to_string(),
                 title: "Pending Album".to_string(),
                 release_year: None,
+                genre: None,
                 notes: None,
                 cover_image_url: None,
             },
@@ -687,6 +726,7 @@ mod tests {
                 artist: "Complete Artist".to_string(),
                 title: "Complete Album".to_string(),
                 release_year: None,
+                genre: None,
                 notes: None,
                 cover_image_url: None,
             },
@@ -699,6 +739,7 @@ mod tests {
             &complete.id,
             MetadataUpdate {
                 release_year: None,
+                genre: Some("Rock".to_string()),
                 notes: None,
                 cover_image_url: None,
                 metadata_status: "complete".to_string(),
@@ -729,6 +770,7 @@ mod tests {
                 artist: "Test".to_string(),
                 title: "Album".to_string(),
                 release_year: None,
+                genre: None,
                 notes: None,
                 cover_image_url: None,
             },
@@ -743,6 +785,7 @@ mod tests {
                 artist: PatchField::Value("Updated Artist".to_string()),
                 title: PatchField::Missing,
                 release_year: PatchField::Value(2020),
+                genre: PatchField::Missing,
                 notes: PatchField::Missing,
                 cover_image_url: PatchField::Missing,
             },
@@ -766,6 +809,7 @@ mod tests {
                 artist: "Test".to_string(),
                 title: "Album".to_string(),
                 release_year: Some(1999),
+                genre: Some("Rock".to_string()),
                 notes: Some("Original notes".to_string()),
                 cover_image_url: Some("https://example.com/cover.jpg".to_string()),
             },
@@ -780,6 +824,7 @@ mod tests {
                 artist: PatchField::Missing,
                 title: PatchField::Missing,
                 release_year: PatchField::Null,
+                genre: PatchField::Null,
                 notes: PatchField::Null,
                 cover_image_url: PatchField::Value("".to_string()),
             },
@@ -788,6 +833,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(updated.release_year, None);
+        assert_eq!(updated.genre, None);
         assert_eq!(updated.notes, None);
         assert_eq!(updated.cover_image_url, None);
     }
@@ -796,12 +842,14 @@ mod tests {
     async fn test_update_vinyl_accepts_json_nulls() {
         let input: UpdateVinyl = serde_json::from_value(serde_json::json!({
             "release_year": null,
+            "genre": null,
             "notes": null,
             "cover_image_url": null
         }))
         .unwrap();
 
         assert_eq!(input.release_year, PatchField::Null);
+        assert_eq!(input.genre, PatchField::Null);
         assert_eq!(input.notes, PatchField::Null);
         assert_eq!(input.cover_image_url, PatchField::Null);
         assert_eq!(input.artist, PatchField::Missing);
@@ -816,6 +864,7 @@ mod tests {
                 artist: "Test".to_string(),
                 title: "Album".to_string(),
                 release_year: None,
+                genre: None,
                 notes: None,
                 cover_image_url: None,
             },
@@ -828,6 +877,7 @@ mod tests {
             &vinyl.id,
             MetadataUpdate {
                 release_year: Some(1970),
+                genre: Some("Rock".to_string()),
                 notes: Some("Metadata: https://example.com".to_string()),
                 cover_image_url: Some("https://example.com/cover.jpg".to_string()),
                 metadata_status: "complete".to_string(),
@@ -844,6 +894,7 @@ mod tests {
 
         let updated = Vinyl::get(&pool, &vinyl.id).await.unwrap();
         assert_eq!(updated.release_year, Some(1970));
+        assert_eq!(updated.genre.as_deref(), Some("Rock"));
         assert_eq!(updated.metadata_status, "complete");
         assert_eq!(updated.metadata_source_id.as_deref(), Some("mbid"));
     }
@@ -857,6 +908,7 @@ mod tests {
                 artist: "Test".to_string(),
                 title: "Pending".to_string(),
                 release_year: None,
+                genre: None,
                 notes: None,
                 cover_image_url: None,
             },
@@ -870,6 +922,7 @@ mod tests {
                 artist: "Test".to_string(),
                 title: "Complete".to_string(),
                 release_year: None,
+                genre: None,
                 notes: None,
                 cover_image_url: None,
             },
@@ -881,6 +934,7 @@ mod tests {
             &complete.id,
             MetadataUpdate {
                 release_year: None,
+                genre: Some("Rock".to_string()),
                 notes: None,
                 cover_image_url: None,
                 metadata_status: "complete".to_string(),
@@ -895,8 +949,41 @@ mod tests {
         .await
         .unwrap();
 
+        let complete_missing_genre = Vinyl::create(
+            &pool,
+            CreateVinyl {
+                artist: "Test".to_string(),
+                title: "Complete Missing Genre".to_string(),
+                release_year: None,
+                genre: None,
+                notes: None,
+                cover_image_url: None,
+            },
+        )
+        .await
+        .unwrap();
+        Vinyl::update_metadata(
+            &pool,
+            &complete_missing_genre.id,
+            MetadataUpdate {
+                release_year: None,
+                genre: None,
+                notes: None,
+                cover_image_url: None,
+                metadata_status: "complete".to_string(),
+                metadata_source: Some("musicbrainz".to_string()),
+                metadata_source_id: Some("missing-genre".to_string()),
+                metadata_source_url: Some("https://musicbrainz.org/release-group/missing-genre".to_string()),
+                metadata_candidates: None,
+                metadata_error: None,
+                metadata_checked_at: Some(Utc::now()),
+            },
+        )
+        .await
+        .unwrap();
+
         let ids = Vinyl::list_requiring_metadata(&pool, 10).await.unwrap();
-        assert_eq!(ids, vec![pending.id]);
+        assert_eq!(ids, vec![pending.id, complete_missing_genre.id]);
     }
 
     #[tokio::test]
@@ -909,6 +996,7 @@ mod tests {
                 artist: "Test".to_string(),
                 title: "Album".to_string(),
                 release_year: None,
+                genre: None,
                 notes: None,
                 cover_image_url: None,
             },

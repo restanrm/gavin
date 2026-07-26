@@ -13,6 +13,7 @@ A Rust + React web application for browsing and managing a family vinyl record l
   - Edit album information from catalog cards
   - Filter the catalog to albums with missing metadata for review
   - Save edited album information and retry metadata enrichment from the edit dialog
+  - Store, edit, display, and enrich album music genres (rap, R&B, rock, etc.)
   - See exactly which metadata fields or lookup steps are missing in the edit dialog
   - Upload cover images
   - Bulk import via CSV
@@ -190,6 +191,7 @@ The frontend expects the following API endpoints:
   artist: string;
   title: string;
   release_year?: number | null;
+  genre?: string | null;
   notes?: string | null;
   cover_image_url?: string | null;
   created_at: string;
@@ -270,7 +272,7 @@ src/
 The bulk import feature accepts CSV data in the following format:
 
 ```csv
-artist,title,year,notes,cover_url
+artist,title,year,notes,cover_url,genre
 ```
 
 - **artist** (required): Artist name
@@ -278,15 +280,16 @@ artist,title,year,notes,cover_url
 - **year** (optional): Release year (must be a number)
 - **notes** (optional): Additional notes
 - **cover_url** (optional): URL to cover image
+- **genre** (optional): Album genre (for example Rap, R&B, Rock, Jazz)
 
 Bulk imports are enriched against MusicBrainz one album at a time. If several plausible albums match one CSV row, the row is created with `metadata_status: "needs_choice"` and the candidate albums are stored in `metadata_candidates` for admin review.
 
 ### Example
 
 ```csv
-The Beatles,Abbey Road,1969,Final studio album,https://example.com/abbey.jpg
-Pink Floyd,The Dark Side of the Moon,1973
-Miles Davis,Kind of Blue,1959,Essential jazz album
+The Beatles,Abbey Road,1969,Final studio album,https://example.com/abbey.jpg,Rock
+Pink Floyd,The Dark Side of the Moon,1973,,,Rock
+Miles Davis,Kind of Blue,1959,Essential jazz album,,Jazz
 ```
 
 ## Album Cover Photo Import
@@ -353,12 +356,12 @@ Key configuration options:
 - `COVER_ART_ARCHIVE_BASE_URL` - Cover Art Archive API base URL (default: `https://coverartarchive.org`)
 
 **Album Metadata Enrichment**:
-- Creating a vinyl (single or bulk) performs a best-effort lookup via MusicBrainz and stores release year, a local cover art URL when caching succeeds, source URL, and lookup status in SQLite.
+- Creating a vinyl (single or bulk) performs a best-effort lookup via MusicBrainz and stores release year, genre, a local cover art URL when caching succeeds, source URL, and lookup status in SQLite.
 - If the initial MusicBrainz lookup is missing or low-confidence, Gavin also checks French vinyl retailer search pages (FNAC and Cultura) for album-title hints, then resolves those hints back through MusicBrainz.
 - Cover thumbnails discovered through MusicBrainz/Cover Art Archive, artist searches, cover-photo imports, or manual cover URLs are cached under `UPLOAD_DIR/album-covers` when possible so catalog thumbnails load from Gavin instead of the public internet.
 - Cover-photo imports use the configured visual recognition provider to find MusicBrainz candidates, then store a local Gavin-served copy of the official Cover Art Archive thumbnail for the imported album.
 - If multiple plausible album matches exist, Gavin marks the record as `needs_choice` and stores candidate choices instead of guessing.
-- On startup, Gavin launches an asynchronous background check that retries rows with pending, failed, or missing metadata lookups.
+- On startup, Gavin launches an asynchronous background metadata maintenance check, then repeats it daily to retry rows with pending, failed, not-found, or incomplete metadata (including missing genre) and to cache external cover URLs.
 
 **OIDC Configuration** (required when `AUTH_MODE=oidc`):
 - `OIDC_ISSUER_URL` - OIDC provider issuer URL

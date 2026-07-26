@@ -11,11 +11,15 @@ describe('hasMissingMetadata', () => {
   );
 
   it.each<Vinyl['metadata_status']>(['complete', 'disabled'])(
-    'does not treat %s as missing metadata',
+    'does not treat %s as missing metadata when genre is present',
     (metadata_status) => {
-      expect(hasMissingMetadata({ metadata_status })).toBe(false);
+      expect(hasMissingMetadata({ metadata_status, genre: 'Rock' })).toBe(false);
     },
   );
+
+  it('treats albums without a genre as missing metadata', () => {
+    expect(hasMissingMetadata({ metadata_status: 'complete', genre: null })).toBe(true);
+  });
 });
 
 describe('missingMetadataItems', () => {
@@ -24,12 +28,14 @@ describe('missingMetadataItems', () => {
       missingMetadataItems({
         metadata_status: 'pending',
         release_year: null,
+        genre: null,
         cover_image_url: null,
         metadata_source_url: null,
       }),
     ).toEqual([
       'Metadata lookup has not run yet',
       'Release year',
+      'Genre',
       'Cover image',
     ]);
   });
@@ -39,6 +45,7 @@ describe('missingMetadataItems', () => {
       missingMetadataItems({
         metadata_status: 'needs_choice',
         release_year: 1969,
+        genre: 'Rock',
         cover_image_url: '/uploads/album-covers/cover.jpg',
         metadata_source_url: null,
       }),

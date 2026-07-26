@@ -35,6 +35,7 @@ const FRENCH_RETAIL_SOURCES: &[(&str, &str)] = &[
 ];
 const STARTUP_BATCH_SIZE: i64 = 100;
 const STARTUP_COVER_CACHE_BATCH_SIZE: i64 = 1_000;
+const METADATA_MAINTENANCE_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 const COVER_CACHE_URL_PREFIX: &str = "/uploads/album-covers";
 const MAX_CACHED_COVER_SIZE: usize = 10 * 1024 * 1024;
 
@@ -107,6 +108,7 @@ impl AlbumMetadataClient {
             Ok(LookupOutcome::Selected(candidate)) => {
                 let update = MetadataUpdate {
                     release_year: vinyl.release_year.or(candidate.release_year),
+                    genre: vinyl.genre.or(candidate.genre.clone()),
                     notes: vinyl.notes,
                     cover_image_url: vinyl.cover_image_url.or(candidate.cover_image_url.clone()),
                     metadata_status: "complete".to_string(),
@@ -129,6 +131,7 @@ impl AlbumMetadataClient {
                     vinyl_id,
                     MetadataUpdate {
                         release_year: vinyl.release_year,
+                        genre: vinyl.genre,
                         notes: vinyl.notes,
                         cover_image_url: vinyl.cover_image_url,
                         metadata_status: "needs_choice".to_string(),
@@ -489,6 +492,7 @@ impl AlbumMetadataClient {
                 title: vinyl.title.clone(),
                 artist: vinyl.artist.clone(),
                 release_year: vinyl.release_year,
+                genre: vinyl.genre.clone(),
                 cover_image_url: vinyl.cover_image_url.clone(),
                 disambiguation: None,
                 source_url: vinyl.metadata_source_url.clone().unwrap_or_else(|| {
@@ -700,6 +704,7 @@ impl AlbumMetadataClient {
                 ("query", query),
                 ("type", "album"),
                 ("fmt", "json"),
+                ("inc", "genres+tags"),
                 ("limit", limit.as_str()),
             ])
             .send()
@@ -1035,40 +1040,59 @@ impl AlbumMetadataClient {
     }
 }
 
-/// Start a best-effort asynchronous job that fills missing metadata after app startup.
+/// Start a best-effort asynchronous job that fills missing metadata at startup
+/// and then retries missing metadata periodically.
 pub fn spawn_startup_metadata_job(pool: SqlitePool, client: AlbumMetadataClient) {
     tokio::spawn(async move {
         if !client.enabled {
-            tracing::info!("Album metadata startup check skipped because lookups are disabled");
+            tracing::info!("Album metadata maintenance skipped because lookups are disabled");
             return;
         }
 
-        tracing::info!("Starting album metadata completeness check");
-        match Vinyl::list_requiring_metadata(&pool, STARTUP_BATCH_SIZE).await {
-            Ok(ids) => {
-                let total = ids.len();
-                for (index, id) in ids.into_iter().enumerate() {
-                    if index > 0 {
-                        tokio::time::sleep(Duration::from_millis(1100)).await;
-                    }
+        run_metadata_maintenance_pass(&pool, &client, "startup").await;
 
-                    if let Err(err) = client.enrich_vinyl(&pool, &id).await {
-                        tracing::warn!(vinyl_id = %id, error = %err, "startup metadata enrichment failed");
-                    }
-                }
-                tracing::info!(checked = total, "Album metadata completeness check finished");
-            }
-            Err(err) => tracing::warn!(error = %err, "failed to list vinyls requiring metadata"),
-        }
-
-        match client
-            .cache_existing_vinyl_covers(&pool, STARTUP_COVER_CACHE_BATCH_SIZE)
-            .await
-        {
-            Ok(updated) => tracing::info!(updated, "Album cover cache check finished"),
-            Err(err) => tracing::warn!(error = %err, "failed to cache existing album covers"),
+        loop {
+            tokio::time::sleep(METADATA_MAINTENANCE_INTERVAL).await;
+            run_metadata_maintenance_pass(&pool, &client, "scheduled").await;
         }
     });
+}
+
+async fn run_metadata_maintenance_pass(
+    pool: &SqlitePool,
+    client: &AlbumMetadataClient,
+    trigger: &'static str,
+) {
+    tracing::info!(trigger, "Starting album metadata maintenance check");
+    match Vinyl::list_requiring_metadata(pool, STARTUP_BATCH_SIZE).await {
+        Ok(ids) => {
+            let total = ids.len();
+            for (index, id) in ids.into_iter().enumerate() {
+                if index > 0 {
+                    tokio::time::sleep(Duration::from_millis(1100)).await;
+                }
+
+                if let Err(err) = client.enrich_vinyl(pool, &id).await {
+                    tracing::warn!(
+                        trigger,
+                        vinyl_id = %id,
+                        error = %err,
+                        "metadata maintenance enrichment failed"
+                    );
+                }
+            }
+            tracing::info!(trigger, checked = total, "Album metadata maintenance check finished");
+        }
+        Err(err) => tracing::warn!(trigger, error = %err, "failed to list vinyls requiring metadata"),
+    }
+
+    match client
+        .cache_existing_vinyl_covers(pool, STARTUP_COVER_CACHE_BATCH_SIZE)
+        .await
+    {
+        Ok(updated) => tracing::info!(trigger, updated, "Album cover cache check finished"),
+        Err(err) => tracing::warn!(trigger, error = %err, "failed to cache existing album covers"),
+    }
 }
 
 #[derive(Debug)]
@@ -1094,6 +1118,7 @@ pub struct AlbumCandidate {
     pub title: String,
     pub artist: String,
     pub release_year: Option<i32>,
+    pub genre: Option<String>,
     pub cover_image_url: Option<String>,
     pub disambiguation: Option<String>,
     pub source_url: String,
@@ -1174,6 +1199,7 @@ impl From<MusicBrainzReleaseGroup> for AlbumCandidate {
                 .as_deref()
                 .and_then(|date| date.get(0..4))
                 .and_then(|year| year.parse().ok()),
+            genre: primary_genre(&group.genres, &group.tags),
             cover_image_url: None,
             disambiguation: group.disambiguation.filter(|value| !value.trim().is_empty()),
             source_url,
@@ -1199,6 +1225,17 @@ struct MusicBrainzReleaseGroup {
     artist_credit: Vec<MusicBrainzArtistCredit>,
     #[serde(default)]
     disambiguation: Option<String>,
+    #[serde(default)]
+    genres: Vec<MusicBrainzTag>,
+    #[serde(default)]
+    tags: Vec<MusicBrainzTag>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MusicBrainzTag {
+    name: String,
+    #[serde(default)]
+    count: Option<i32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1361,6 +1398,44 @@ fn recognition_terms(provider: &str, raw_terms: Vec<String>) -> anyhow::Result<V
     }
 
     Ok(terms)
+}
+
+fn primary_genre(genres: &[MusicBrainzTag], tags: &[MusicBrainzTag]) -> Option<String> {
+    let mut candidates = genres.iter().chain(tags.iter()).collect::<Vec<_>>();
+    candidates.sort_by(|left, right| right.count.unwrap_or(0).cmp(&left.count.unwrap_or(0)));
+
+    candidates
+        .into_iter()
+        .map(|tag| canonical_genre_name(&tag.name))
+        .find(|name| !name.trim().is_empty())
+}
+
+fn canonical_genre_name(name: &str) -> String {
+    match normalize(name).as_str() {
+        "hiphop" | "rap" => "Rap".to_string(),
+        "rnb" | "rhythmandblues" => "R&B".to_string(),
+        "rock" => "Rock".to_string(),
+        "pop" => "Pop".to_string(),
+        "jazz" => "Jazz".to_string(),
+        "soul" => "Soul".to_string(),
+        "funk" => "Funk".to_string(),
+        "reggae" => "Reggae".to_string(),
+        "electronic" | "electronica" => "Electronic".to_string(),
+        _ => name
+            .split_whitespace()
+            .map(|word| {
+                let mut chars = word.chars();
+                match chars.next() {
+                    Some(first) => first
+                        .to_uppercase()
+                        .chain(chars.flat_map(char::to_lowercase))
+                        .collect(),
+                    None => String::new(),
+                }
+            })
+            .collect::<Vec<String>>()
+            .join(" "),
+    }
 }
 
 fn artist_credit_name(credits: &[MusicBrainzArtistCredit]) -> Option<String> {
@@ -2102,12 +2177,33 @@ mod tests {
                 name: "The Beatles".to_string(),
             }],
             disambiguation: Some("".to_string()),
+            genres: vec![MusicBrainzTag {
+                name: "rock".to_string(),
+                count: Some(12),
+            }],
+            tags: Vec::new(),
         };
 
         let candidate = AlbumCandidate::from(group);
         assert_eq!(candidate.artist, "The Beatles");
         assert_eq!(candidate.release_year, Some(1969));
+        assert_eq!(candidate.genre.as_deref(), Some("Rock"));
         assert_eq!(candidate.disambiguation, None);
+    }
+
+    #[test]
+    fn maps_musicbrainz_genres_to_display_names() {
+        assert_eq!(
+            primary_genre(
+                &[],
+                &[MusicBrainzTag {
+                    name: "hip hop".to_string(),
+                    count: Some(8),
+                }],
+            )
+            .as_deref(),
+            Some("Rap")
+        );
     }
 
     #[test]
@@ -2251,6 +2347,7 @@ mod tests {
             title: "AMOUR SUPREME".to_string(),
             artist: "Youssoupha".to_string(),
             release_year: Some(2025),
+            genre: Some("Rap".to_string()),
             cover_image_url: Some("https://example.com/youssoupha.jpg".to_string()),
             disambiguation: None,
             source_url: "https://musicbrainz.org/release-group/youssoupha".to_string(),
@@ -2262,6 +2359,7 @@ mod tests {
             title: "Le Monde de demain".to_string(),
             artist: "Suprême NTM".to_string(),
             release_year: Some(1990),
+            genre: Some("Rap".to_string()),
             cover_image_url: Some("https://example.com/ntm.jpg".to_string()),
             disambiguation: None,
             source_url: "https://musicbrainz.org/release-group/ntm".to_string(),
@@ -2284,6 +2382,7 @@ mod tests {
             title: "Album".to_string(),
             artist: "Artist".to_string(),
             release_year: Some(2020),
+            genre: Some("Rock".to_string()),
             cover_image_url: Some("https://example.com/cover.jpg".to_string()),
             disambiguation: None,
             source_url: "https://musicbrainz.org/release-group/winner".to_string(),

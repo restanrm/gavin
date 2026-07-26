@@ -3,7 +3,7 @@ import { parseCSV } from '../utils/csv';
 
 describe('parseCSV', () => {
   it('parses valid CSV with all fields', () => {
-    const csv = 'The Beatles,Abbey Road,1969,Final album,https://example.com/cover.jpg';
+    const csv = 'The Beatles,Abbey Road,1969,Final album,https://example.com/cover.jpg,Rock';
     const result = parseCSV(csv);
 
     expect(result.errors).toHaveLength(0);
@@ -14,6 +14,7 @@ describe('parseCSV', () => {
       year: 1969,
       notes: 'Final album',
       cover_url: 'https://example.com/cover.jpg',
+      genre: 'Rock',
     });
   });
 
@@ -74,6 +75,19 @@ Pink Floyd,The Wall,1979
     expect(result.items[0]).toEqual({
       artist: 'The Beatles',
       title: 'Abbey Road',
+    });
+  });
+
+  it('parses genre when notes and cover URL are empty', () => {
+    const csv = 'Pink Floyd,The Dark Side of the Moon,1973,,,Rock';
+    const result = parseCSV(csv);
+
+    expect(result.errors).toHaveLength(0);
+    expect(result.items[0]).toEqual({
+      artist: 'Pink Floyd',
+      title: 'The Dark Side of the Moon',
+      year: 1973,
+      genre: 'Rock',
     });
   });
 

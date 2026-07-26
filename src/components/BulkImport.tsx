@@ -53,17 +53,17 @@ export function BulkImport({ onSuccess }: BulkImportProps) {
       <h3>Bulk Import (CSV)</h3>
 
       <p className="help-text">
-        Format: <code>artist,title,year,notes,cover_url</code> (one per line)
+        Format: <code>artist,title,year,notes,cover_url,genre</code> (one per line)
         <br />
-        Artist and title are required. Year, notes, and cover URL are optional. Album metadata is fetched online during import; rows with multiple matches are marked for review.
+        Artist and title are required. Year, notes, cover URL, and genre are optional. Album metadata is fetched online during import; rows with multiple matches are marked for review.
       </p>
 
       <details className="example-details">
         <summary>Show example</summary>
         <pre className="example-csv">
-{`The Beatles,Abbey Road,1969,Final studio album,https://example.com/abbey.jpg
-Pink Floyd,The Dark Side of the Moon,1973
-Miles Davis,Kind of Blue,1959,Essential jazz album`}
+{`The Beatles,Abbey Road,1969,Final studio album,https://example.com/abbey.jpg,Rock
+Pink Floyd,The Dark Side of the Moon,1973,,,Rock
+Miles Davis,Kind of Blue,1959,Essential jazz album,,Jazz`}
         </pre>
       </details>
 

@@ -9,6 +9,7 @@ export function VinylForm({ onSuccess }: VinylFormProps) {
   const [artist, setArtist] = useState('');
   const [title, setTitle] = useState('');
   const [releaseYear, setReleaseYear] = useState('');
+  const [genre, setGenre] = useState('');
   const [notes, setNotes] = useState('');
   const [coverImageUrl, setCoverImageUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -30,6 +31,7 @@ export function VinylForm({ onSuccess }: VinylFormProps) {
         artist: artist.trim(),
         title: title.trim(),
         ...(releaseYear && { release_year: parseInt(releaseYear, 10) }),
+        ...(genre.trim() && { genre: genre.trim() }),
         ...(notes.trim() && { notes: notes.trim() }),
         ...(coverImageUrl.trim() && { cover_image_url: coverImageUrl.trim() }),
       };
@@ -40,6 +42,7 @@ export function VinylForm({ onSuccess }: VinylFormProps) {
       setArtist('');
       setTitle('');
       setReleaseYear('');
+      setGenre('');
       setNotes('');
       setCoverImageUrl('');
 
@@ -109,6 +112,21 @@ export function VinylForm({ onSuccess }: VinylFormProps) {
           max={new Date().getFullYear()}
           disabled={submitting}
           className="form-input"
+        />
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="genre" className="form-label">
+          Genre
+        </label>
+        <input
+          id="genre"
+          type="text"
+          value={genre}
+          onChange={(e) => setGenre(e.target.value)}
+          disabled={submitting}
+          className="form-input"
+          placeholder="Rap, R&B, Rock…"
         />
       </div>
 

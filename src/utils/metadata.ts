@@ -2,11 +2,16 @@ import type { Vinyl } from '../types';
 
 type MetadataSummaryVinyl = Pick<
   Vinyl,
-  'metadata_status' | 'release_year' | 'cover_image_url' | 'metadata_source_url'
+  'metadata_status' | 'release_year' | 'genre' | 'cover_image_url' | 'metadata_source_url'
 >;
 
-export function hasMissingMetadata(vinyl: Pick<Vinyl, 'metadata_status'>): boolean {
-  return vinyl.metadata_status !== 'complete' && vinyl.metadata_status !== 'disabled';
+export function hasMissingMetadata(
+  vinyl: Pick<Vinyl, 'metadata_status'> & Partial<Pick<Vinyl, 'genre'>>,
+): boolean {
+  return (
+    (vinyl.metadata_status !== 'complete' && vinyl.metadata_status !== 'disabled')
+    || !vinyl.genre?.trim()
+  );
 }
 
 export function missingMetadataItems(vinyl: MetadataSummaryVinyl): string[] {
@@ -32,6 +37,10 @@ export function missingMetadataItems(vinyl: MetadataSummaryVinyl): string[] {
 
   if (!vinyl.release_year) {
     items.push('Release year');
+  }
+
+  if (!vinyl.genre) {
+    items.push('Genre');
   }
 
   if (!vinyl.cover_image_url) {

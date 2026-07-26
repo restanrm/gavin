@@ -6,7 +6,7 @@ import {
   selectVinylMetadataCandidate,
   updateVinyl,
 } from '../utils/api';
-import { missingMetadataItems } from '../utils/metadata';
+import { hasMissingMetadata, missingMetadataItems } from '../utils/metadata';
 import { ImageUpload } from './ImageUpload';
 
 interface VinylCardProps {
@@ -32,12 +32,16 @@ function isGeneratedMetadataNote(notes?: string | null): boolean {
   return notes?.trim().toLowerCase().startsWith('metadata:') ?? false;
 }
 
-function metadataNeedsAdminReview(status: Vinyl['metadata_status']): boolean {
-  return status !== 'complete' && status !== 'disabled';
+function metadataNeedsAdminReview(vinyl: Vinyl): boolean {
+  return hasMissingMetadata(vinyl);
 }
 
-function metadataAlertLabel(status: Vinyl['metadata_status']): string {
-  switch (status) {
+function metadataAlertLabel(vinyl: Vinyl): string {
+  if (hasMissingMetadata(vinyl) && vinyl.metadata_status === 'complete') {
+    return 'Missing metadata';
+  }
+
+  switch (vinyl.metadata_status) {
     case 'needs_choice':
       return 'Pick match';
     case 'not_found':
@@ -54,8 +58,12 @@ function metadataAlertLabel(status: Vinyl['metadata_status']): string {
   }
 }
 
-function metadataLabel(status: Vinyl['metadata_status']): string {
-  switch (status) {
+function metadataLabel(vinyl: Vinyl): string {
+  if (hasMissingMetadata(vinyl) && vinyl.metadata_status === 'complete') {
+    return 'Metadata incomplete';
+  }
+
+  switch (vinyl.metadata_status) {
     case 'pending':
       return 'Metadata pending';
     case 'needs_choice':
@@ -153,6 +161,7 @@ function AlbumDetailsModal({
           <section className="album-detail-content" aria-label="Album information">
             <dl className="album-detail-fields">
               <DetailField label="Artist" value={displayVinyl.artist} />
+              <DetailField label="Genre" value={displayVinyl.genre} />
               <DetailField label="Released" value={details?.release_date ?? displayVinyl.release_year} />
               <DetailField label="Format" value={details?.release_format} />
               <DetailField label="Country" value={details?.release_country} />
@@ -243,12 +252,12 @@ function MetadataDetails({
   };
 
   return (
-    <div className={`metadata-panel ${metadataNeedsAdminReview(vinyl.metadata_status) ? 'metadata-panel-review' : ''}`}>
+    <div className={`metadata-panel ${metadataNeedsAdminReview(vinyl) ? 'metadata-panel-review' : ''}`}>
       <h4>Album metadata</h4>
-      <div className={`metadata-badge metadata-${vinyl.metadata_status}`}>
-        {metadataLabel(vinyl.metadata_status)}
+      <div className={`metadata-badge ${hasMissingMetadata(vinyl) ? 'metadata-needs_choice' : `metadata-${vinyl.metadata_status}`}`}>
+        {metadataLabel(vinyl)}
       </div>
-      {metadataNeedsAdminReview(vinyl.metadata_status) && (
+      {metadataNeedsAdminReview(vinyl) && (
         <p className="metadata-review-help">
           This album needs admin review before its metadata is complete.
         </p>
@@ -328,6 +337,7 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
   const [artist, setArtist] = useState(vinyl.artist);
   const [title, setTitle] = useState(vinyl.title);
   const [releaseYear, setReleaseYear] = useState(vinyl.release_year?.toString() ?? '');
+  const [genre, setGenre] = useState(vinyl.genre ?? '');
   const [notes, setNotes] = useState(vinyl.notes ?? '');
   const [coverImageUrl, setCoverImageUrl] = useState(vinyl.cover_image_url ?? '');
   const [submitting, setSubmitting] = useState(false);
@@ -339,10 +349,11 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
     setArtist(vinyl.artist);
     setTitle(vinyl.title);
     setReleaseYear(vinyl.release_year?.toString() ?? '');
+    setGenre(vinyl.genre ?? '');
     setNotes(vinyl.notes ?? '');
     setCoverImageUrl(vinyl.cover_image_url ?? '');
     setError(null);
-  }, [vinyl.artist, vinyl.title, vinyl.release_year, vinyl.notes, vinyl.cover_image_url]);
+  }, [vinyl.artist, vinyl.title, vinyl.release_year, vinyl.genre, vinyl.notes, vinyl.cover_image_url]);
 
   const handleDelete = () => {
     if (window.confirm(`Delete "${vinyl.title}" by ${vinyl.artist}?`)) {
@@ -446,6 +457,7 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
     const trimmedArtist = artist.trim();
     const trimmedTitle = title.trim();
     const trimmedReleaseYear = releaseYear.trim();
+    const trimmedGenre = genre.trim();
     const trimmedNotes = notes.trim();
     const trimmedCoverImageUrl = coverImageUrl.trim();
 
@@ -464,6 +476,7 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
       artist: trimmedArtist,
       title: trimmedTitle,
       release_year: parsedReleaseYear,
+      genre: trimmedGenre || null,
       notes: trimmedNotes || null,
       cover_image_url: trimmedCoverImageUrl || null,
     };
@@ -508,6 +521,7 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
       setMetadataPreviewVinyl(refreshedVinyl);
       setNeedsParentRefreshOnClose(true);
       setReleaseYear(refreshedVinyl.release_year?.toString() ?? '');
+      setGenre(refreshedVinyl.genre ?? '');
       setNotes(refreshedVinyl.notes ?? '');
       setCoverImageUrl(refreshedVinyl.cover_image_url ?? '');
     } catch (err) {
@@ -519,14 +533,14 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
 
   const metadataDetailsVinyl = metadataPreviewVinyl ?? vinyl;
   const coverPreviewUrl = coverImageUrl.trim() || metadataDetailsVinyl.cover_image_url;
-  const showMetadataReview = isAdmin && metadataNeedsAdminReview(vinyl.metadata_status);
+  const showMetadataReview = isAdmin && metadataNeedsAdminReview(vinyl);
 
   return (
     <>
       <article className={`vinyl-card ${showMetadataReview ? 'vinyl-card-metadata-review' : ''}`}>
         {showMetadataReview && (
           <div className={`vinyl-card-alert metadata-${vinyl.metadata_status}`}>
-            {metadataAlertLabel(vinyl.metadata_status)}
+            {metadataAlertLabel(vinyl)}
           </div>
         )}
         <button
@@ -561,6 +575,7 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
                 {vinyl.release_year}
               </p>
             )}
+            {vinyl.genre && <p className="vinyl-genre">{vinyl.genre}</p>}
             {vinyl.notes && !isGeneratedMetadataNote(vinyl.notes) && (
               <p className="vinyl-notes">{vinyl.notes}</p>
             )}
@@ -696,6 +711,21 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
                       required
                       disabled={submitting}
                       className="form-input"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor={`edit-genre-${vinyl.id}`} className="form-label">
+                      Genre
+                    </label>
+                    <input
+                      id={`edit-genre-${vinyl.id}`}
+                      type="text"
+                      value={genre}
+                      onChange={(event) => setGenre(event.target.value)}
+                      disabled={submitting}
+                      className="form-input"
+                      placeholder="Rap, R&B, Rock…"
                     />
                   </div>
 

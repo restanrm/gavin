@@ -273,6 +273,7 @@ async fn localize_update_cover(state: &AppState, input: UpdateVinyl) -> UpdateVi
         artist,
         title,
         release_year,
+        genre,
         notes,
         cover_image_url,
     } = input;
@@ -289,6 +290,7 @@ async fn localize_update_cover(state: &AppState, input: UpdateVinyl) -> UpdateVi
         artist,
         title,
         release_year,
+        genre,
         notes,
         cover_image_url,
     }
@@ -330,6 +332,7 @@ async fn create_vinyl_from_candidate(
             artist: candidate.artist.clone(),
             title: candidate.title.clone(),
             release_year: candidate.release_year,
+            genre: candidate.genre.clone(),
             notes: notes.clone(),
             cover_image_url: cover_image_url.clone(),
         },
@@ -341,6 +344,7 @@ async fn create_vinyl_from_candidate(
         &vinyl.id,
         MetadataUpdate {
             release_year: candidate.release_year,
+            genre: candidate.genre,
             notes,
             cover_image_url,
             metadata_status: "complete".to_string(),
@@ -387,6 +391,10 @@ async fn apply_candidate_to_vinyl(
             release_year: candidate
                 .release_year
                 .map_or(PatchField::Missing, PatchField::Value),
+            genre: candidate
+                .genre
+                .clone()
+                .map_or(PatchField::Missing, PatchField::Value),
             notes: notes_update
                 .clone()
                 .map_or(PatchField::Missing, PatchField::Value),
@@ -402,6 +410,7 @@ async fn apply_candidate_to_vinyl(
         id,
         MetadataUpdate {
             release_year: candidate.release_year,
+            genre: candidate.genre,
             notes: notes_update,
             cover_image_url,
             metadata_status: "complete".to_string(),

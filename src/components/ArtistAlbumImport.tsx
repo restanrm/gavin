@@ -126,6 +126,7 @@ export function ArtistAlbumImport({ onSuccess }: ArtistAlbumImportProps) {
                     <strong>{candidate.title}</strong>
                     <span>{candidate.artist}</span>
                     {candidate.release_year && <span>{candidate.release_year}</span>}
+                    {candidate.genre && <span>{candidate.genre}</span>}
                     {candidate.disambiguation && <small>{candidate.disambiguation}</small>}
                   </div>
                   <button

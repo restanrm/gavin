@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Repository-local agent guidance** documenting Gavin project context, validation commands, and the requirement to add all future changes to the `Unreleased` changelog section.
 - **Admin metadata-missing catalog filter** to show only albums whose metadata still needs review or retry.
 - **Edit-dialog metadata refresh action** that saves the current album edits and retries metadata enrichment immediately.
+- **Album genre support** with SQLite storage, manual add/edit fields, catalog/detail display, CSV import support, MusicBrainz genre/tag enrichment, and missing-metadata filtering for albums without a genre.
+- **Daily album metadata maintenance job** that runs after startup and then periodically retries albums with pending, failed, not-found, or incomplete metadata and rechecks external cover caching.
 - **Missing metadata details** in the album edit dialog showing which metadata fields or lookup steps still need attention.
 
 ### Fixed

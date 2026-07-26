@@ -5,6 +5,7 @@ type VinylUpdateInput = Partial<{
   artist: string;
   title: string;
   release_year: number | null;
+  genre: string | null;
   notes: string | null;
   cover_image_url: string | null;
 }>;

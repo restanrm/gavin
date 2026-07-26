@@ -3,6 +3,7 @@ export interface Vinyl {
   artist: string;
   title: string;
   release_year?: number | null;
+  genre?: string | null;
   notes?: string | null;
   cover_image_url?: string | null;
   created_at: string;
@@ -53,6 +54,7 @@ export interface AlbumCandidate {
   title: string;
   artist: string;
   release_year?: number;
+  genre?: string;
   cover_image_url?: string;
   disambiguation?: string;
   source_url: string;
@@ -72,6 +74,7 @@ export interface BulkImportItem {
   title: string;
   year?: number;
   release_year?: number;
+  genre?: string;
   notes?: string;
   cover_url?: string;
   cover_image_url?: string;

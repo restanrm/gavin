@@ -7,10 +7,10 @@ export interface ParseResult {
 
 /**
  * Parse CSV text into bulk import items
- * Format: artist,title,year,notes,cover_url
+ * Format: artist,title,year,notes,cover_url,genre
  * - artist and title are required
  * - year must be a valid number if present
- * - notes and cover_url are optional
+ * - notes, cover_url, and genre are optional
  */
 export function parseCSV(text: string): ParseResult {
   const items: BulkImportItem[] = [];
@@ -30,7 +30,7 @@ export function parseCSV(text: string): ParseResult {
       return;
     }
 
-    const [artist, title, yearStr, notes, coverUrl] = parts;
+    const [artist, title, yearStr, notes, coverUrl, genre] = parts;
 
     if (!artist) {
       errors.push(`Line ${lineNumber}: Artist is required`);
@@ -65,6 +65,11 @@ export function parseCSV(text: string): ParseResult {
     // Add optional cover URL
     if (coverUrl && coverUrl.length > 0) {
       item.cover_url = coverUrl;
+    }
+
+    // Add optional genre
+    if (genre && genre.length > 0) {
+      item.genre = genre;
     }
 
     items.push(item);

@@ -76,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
     )
     .await?;
 
-    // Start best-effort metadata completeness check in the background.
+    // Start best-effort metadata maintenance in the background.
     album_metadata::spawn_startup_metadata_job(pool, metadata_client);
 
     // Apply middleware

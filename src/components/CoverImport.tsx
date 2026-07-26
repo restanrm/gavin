@@ -215,6 +215,7 @@ export function CoverImport({ onSuccess }: CoverImportProps) {
                       <strong>{candidate.title}</strong>
                       <span>{candidate.artist}</span>
                       {candidate.release_year && <span>{candidate.release_year}</span>}
+                      {candidate.genre && <span>{candidate.genre}</span>}
                       {candidate.disambiguation && <small>{candidate.disambiguation}</small>}
                       <span className="cover-candidate-action">
                         {selectingId === candidate.id ? 'Importing...' : 'Click this jacket to import'}

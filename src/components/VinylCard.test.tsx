@@ -93,6 +93,13 @@ describe('VinylCard', () => {
     expect(screen.getByLabelText(/delete abbey road/i)).toBeInTheDocument();
   });
 
+  it('highlights complete albums that are missing genre metadata for admins', () => {
+    render(<VinylCard vinyl={mockVinyl} isAdmin onUpdate={() => {}} />);
+
+    expect(screen.getByText('Missing metadata')).toBeInTheDocument();
+    expect(screen.getByLabelText(/edit abbey road and review metadata/i)).toBeInTheDocument();
+  });
+
   it('saves local cover image paths from cached metadata', async () => {
     const onUpdate = vi.fn();
     const localCoverVinyl: Vinyl = {
@@ -119,6 +126,7 @@ describe('VinylCard', () => {
           artist: 'The Beatles',
           title: 'Abbey Road',
           release_year: 1969,
+          genre: null,
           notes: 'Final studio album',
           cover_image_url: '/uploads/album-covers/abbey-road.jpg',
         }),
@@ -141,6 +149,7 @@ describe('VinylCard', () => {
     expect(screen.getByText('Missing or incomplete:')).toBeInTheDocument();
     expect(screen.getByText('Metadata lookup has not run yet')).toBeInTheDocument();
     expect(screen.getByText('Release year')).toBeInTheDocument();
+    expect(screen.getAllByText('Genre')).toHaveLength(2);
     expect(screen.getByText('Cover image')).toBeInTheDocument();
   });
 
@@ -246,6 +255,7 @@ describe('VinylCard', () => {
           artist: 'The Beatles',
           title: 'Abbey Road Deluxe',
           release_year: 1969,
+          genre: null,
           notes: 'Final studio album',
           cover_image_url: 'https://example.com/cover.jpg',
         }),
