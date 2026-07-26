@@ -199,6 +199,20 @@ pub async fn select_vinyl_metadata_candidate(
         .map(Json)
 }
 
+/// Retry album metadata enrichment for an existing vinyl.
+pub async fn refresh_vinyl_metadata(
+    State(state): State<AppState>,
+    session: Session,
+    Path(id): Path<String>,
+) -> Result<Json<Vinyl>> {
+    require_admin(&state, &session).await?;
+    state
+        .metadata_client
+        .enrich_vinyl(&state.pool, &id)
+        .await
+        .map(Json)
+}
+
 /// Upload a file
 pub async fn upload_file(
     State(state): State<AppState>,

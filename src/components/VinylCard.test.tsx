@@ -155,6 +155,61 @@ describe('VinylCard', () => {
     );
   });
 
+  it('saves edited information before refreshing album metadata', async () => {
+    const onUpdate = vi.fn();
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (url === '/api/admin/vinyls/1') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ ...mockVinyl, title: 'Abbey Road Deluxe' }),
+        });
+      }
+      if (url === '/api/admin/vinyls/1/metadata-refresh') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ ...mockVinyl, title: 'Abbey Road Deluxe', metadata_status: 'complete' }),
+        });
+      }
+      return Promise.reject(new Error(`Unexpected fetch: ${url}`));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<VinylCard vinyl={mockVinyl} isAdmin onUpdate={onUpdate} />);
+
+    fireEvent.click(screen.getByLabelText(/edit abbey road/i));
+    fireEvent.change(screen.getByLabelText(/title/i), {
+      target: { value: 'Abbey Road Deluxe' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /save & refresh metadata/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(onUpdate).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: /abbey road/i })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/admin/vinyls/1',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({
+          artist: 'The Beatles',
+          title: 'Abbey Road Deluxe',
+          release_year: 1969,
+          notes: 'Final studio album',
+          cover_image_url: 'https://example.com/cover.jpg',
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/admin/vinyls/1/metadata-refresh',
+      expect.objectContaining({ method: 'POST' }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+    expect(onUpdate).toHaveBeenCalled();
+  });
+
   it('handles optional fields being absent', () => {
     const minimalVinyl: Vinyl = {
       id: '2',

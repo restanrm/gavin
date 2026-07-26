@@ -84,6 +84,12 @@ export async function updateVinyl(id: string, vinyl: VinylUpdateInput): Promise<
   });
 }
 
+export async function refreshVinylMetadata(id: string): Promise<Vinyl> {
+  return fetchJSON<Vinyl>(`${BASE_URL}/admin/vinyls/${id}/metadata-refresh`, {
+    method: 'POST',
+  });
+}
+
 export async function deleteVinyl(id: string): Promise<void> {
   await fetch(`${BASE_URL}/admin/vinyls/${id}`, {
     method: 'DELETE',

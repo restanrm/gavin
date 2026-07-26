@@ -12,6 +12,7 @@ A Rust + React web application for browsing and managing a family vinyl record l
   - Add individual vinyl records
   - Edit album information from catalog cards
   - Filter the catalog to albums with missing metadata for review
+  - Save edited album information and retry metadata enrichment from the edit dialog
   - Upload cover images
   - Bulk import via CSV
   - Delete records
@@ -171,6 +172,7 @@ The frontend expects the following API endpoints:
 - `POST /api/admin/vinyls` - Create vinyl record
 - `PUT /api/admin/vinyls/:id` - Update vinyl record. Omit unchanged fields; send `null` for optional fields (`release_year`, `notes`, `cover_image_url`) to clear them.
 - `POST /api/admin/vinyls/:id/metadata-candidate` - Apply a reviewed MusicBrainz candidate to an existing vinyl whose metadata needs a choice
+- `POST /api/admin/vinyls/:id/metadata-refresh` - Retry metadata enrichment for an existing vinyl after edits
 - `DELETE /api/admin/vinyls/:id` - Delete vinyl record
 - `GET /api/admin/albums/search?artist=` - Search MusicBrainz albums by artist for manual selection
 - `POST /api/admin/vinyls/bulk` - Bulk import vinyls

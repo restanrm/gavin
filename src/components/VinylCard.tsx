@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import type { AlbumCandidate, AlbumDetails, Vinyl } from '../types';
-import { getVinylDetails, selectVinylMetadataCandidate, updateVinyl } from '../utils/api';
+import {
+  getVinylDetails,
+  refreshVinylMetadata,
+  selectVinylMetadataCandidate,
+  updateVinyl,
+} from '../utils/api';
 import { ImageUpload } from './ImageUpload';
 
 interface VinylCardProps {
@@ -315,6 +320,8 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
   const [coverImageUrl, setCoverImageUrl] = useState(vinyl.cover_image_url ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [metadataPreviewVinyl, setMetadataPreviewVinyl] = useState<Vinyl | null>(null);
+  const [needsParentRefreshOnClose, setNeedsParentRefreshOnClose] = useState(false);
 
   const resetForm = useCallback(() => {
     setArtist(vinyl.artist);
@@ -333,13 +340,20 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
 
   const handleEdit = () => {
     resetForm();
+    setMetadataPreviewVinyl(null);
+    setNeedsParentRefreshOnClose(false);
     setIsEditing(true);
   };
 
   const handleCancel = useCallback(() => {
     resetForm();
+    setMetadataPreviewVinyl(null);
     setIsEditing(false);
-  }, [resetForm]);
+    if (needsParentRefreshOnClose) {
+      setNeedsParentRefreshOnClose(false);
+      onUpdate?.();
+    }
+  }, [needsParentRefreshOnClose, onUpdate, resetForm]);
 
   const handleOpenDetails = () => {
     setAlbumDetails(null);
@@ -410,13 +424,13 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
 
   const handleSelectMetadataCandidate = useCallback(async (candidate: AlbumCandidate) => {
     await selectVinylMetadataCandidate(vinyl.id, candidate);
+    setMetadataPreviewVinyl(null);
+    setNeedsParentRefreshOnClose(false);
     setIsEditing(false);
     onUpdate?.();
   }, [vinyl.id, onUpdate]);
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-
+  const currentFormVinylInput = () => {
     const trimmedArtist = artist.trim();
     const trimmedTitle = title.trim();
     const trimmedReleaseYear = releaseYear.trim();
@@ -425,12 +439,29 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
 
     if (!trimmedArtist || !trimmedTitle) {
       setError('Artist and title are required');
-      return;
+      return null;
     }
 
     const parsedReleaseYear = trimmedReleaseYear ? parseInt(trimmedReleaseYear, 10) : null;
     if (trimmedReleaseYear && Number.isNaN(parsedReleaseYear)) {
       setError('Release year must be a valid number');
+      return null;
+    }
+
+    return {
+      artist: trimmedArtist,
+      title: trimmedTitle,
+      release_year: parsedReleaseYear,
+      notes: trimmedNotes || null,
+      cover_image_url: trimmedCoverImageUrl || null,
+    };
+  };
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+
+    const input = currentFormVinylInput();
+    if (!input) {
       return;
     }
 
@@ -438,13 +469,9 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
     setError(null);
 
     try {
-      await updateVinyl(vinyl.id, {
-        artist: trimmedArtist,
-        title: trimmedTitle,
-        release_year: parsedReleaseYear,
-        notes: trimmedNotes || null,
-        cover_image_url: trimmedCoverImageUrl || null,
-      });
+      await updateVinyl(vinyl.id, input);
+      setMetadataPreviewVinyl(null);
+      setNeedsParentRefreshOnClose(false);
       setIsEditing(false);
       onUpdate?.();
     } catch (err) {
@@ -454,7 +481,32 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
     }
   };
 
-  const coverPreviewUrl = coverImageUrl.trim() || vinyl.cover_image_url;
+  const handleRefreshMetadata = async () => {
+    const input = currentFormVinylInput();
+    if (!input) {
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      await updateVinyl(vinyl.id, input);
+      const refreshedVinyl = await refreshVinylMetadata(vinyl.id);
+      setMetadataPreviewVinyl(refreshedVinyl);
+      setNeedsParentRefreshOnClose(true);
+      setReleaseYear(refreshedVinyl.release_year?.toString() ?? '');
+      setNotes(refreshedVinyl.notes ?? '');
+      setCoverImageUrl(refreshedVinyl.cover_image_url ?? '');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to refresh album metadata');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const metadataDetailsVinyl = metadataPreviewVinyl ?? vinyl;
+  const coverPreviewUrl = coverImageUrl.trim() || metadataDetailsVinyl.cover_image_url;
   const showMetadataReview = isAdmin && metadataNeedsAdminReview(vinyl.metadata_status);
 
   return (
@@ -664,13 +716,21 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
                     />
                   </div>
 
-                  <MetadataDetails vinyl={vinyl} onSelectCandidate={handleSelectMetadataCandidate} />
+                  <MetadataDetails vinyl={metadataDetailsVinyl} onSelectCandidate={handleSelectMetadataCandidate} />
                 </div>
               </div>
 
               <div className="edit-modal-actions">
                 <button type="submit" disabled={submitting} className="btn btn-primary">
                   {submitting ? 'Saving...' : 'Save changes'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRefreshMetadata}
+                  disabled={submitting}
+                  className="btn btn-secondary"
+                >
+                  {submitting ? 'Refreshing...' : 'Save & refresh metadata'}
                 </button>
                 <button
                   type="button"

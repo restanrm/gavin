@@ -81,6 +81,10 @@ pub async fn create_router(
             "/admin/vinyls/:id/metadata-candidate",
             post(handlers::admin::select_vinyl_metadata_candidate),
         )
+        .route(
+            "/admin/vinyls/:id/metadata-refresh",
+            post(handlers::admin::refresh_vinyl_metadata),
+        )
         .route("/admin/vinyls/:id", put(handlers::admin::update_vinyl))
         .route("/admin/vinyls/:id", delete(handlers::admin::delete_vinyl))
         .route(
