@@ -6,7 +6,7 @@ use axum::{
 };
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use std::{path::PathBuf, time::Duration};
+use std::{collections::HashSet, fs, path::{Path as FsPath, PathBuf}, time::Duration};
 use tower_sessions::Session;
 
 use crate::{
@@ -103,6 +103,18 @@ pub struct CoverImportResponse {
     pub candidates: Vec<AlbumCandidate>,
     pub vinyl: Option<Vinyl>,
     pub error: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct MetadataRefreshResponse {
+    pub checked: usize,
+}
+
+#[derive(Serialize)]
+pub struct OrphanedImageCleanupResponse {
+    pub deleted: usize,
+    pub kept: usize,
+    pub errors: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -209,6 +221,41 @@ pub async fn refresh_vinyl_metadata(
     state
         .metadata_client
         .enrich_vinyl(&state.pool, &id)
+        .await
+        .map(Json)
+}
+
+/// Retry metadata enrichment for all vinyls currently missing metadata.
+pub async fn refresh_missing_metadata(
+    State(state): State<AppState>,
+    session: Session,
+) -> Result<Json<MetadataRefreshResponse>> {
+    require_admin(&state, &session).await?;
+
+    const ADMIN_METADATA_REFRESH_LIMIT: i64 = 100;
+    let ids = Vinyl::list_requiring_metadata(&state.pool, ADMIN_METADATA_REFRESH_LIMIT).await?;
+    let mut checked = 0;
+
+    for (index, id) in ids.into_iter().enumerate() {
+        if index > 0 {
+            tokio::time::sleep(Duration::from_millis(1100)).await;
+        }
+
+        state.metadata_client.enrich_vinyl(&state.pool, &id).await?;
+        checked += 1;
+    }
+
+    Ok(Json(MetadataRefreshResponse { checked }))
+}
+
+/// Delete uploaded or cached images that are no longer referenced by any vinyl.
+pub async fn cleanup_orphaned_images(
+    State(state): State<AppState>,
+    session: Session,
+) -> Result<Json<OrphanedImageCleanupResponse>> {
+    require_admin(&state, &session).await?;
+
+    cleanup_orphaned_upload_images(&state.pool, &state.upload_dir)
         .await
         .map(Json)
 }
@@ -435,6 +482,85 @@ async fn local_candidate_cover_url(state: &AppState, candidate: &AlbumCandidate)
             .await,
         None => None,
     }
+}
+
+async fn cleanup_orphaned_upload_images(
+    pool: &sqlx::SqlitePool,
+    upload_dir: &str,
+) -> Result<OrphanedImageCleanupResponse> {
+    let referenced = referenced_upload_paths(&Vinyl::list_cover_image_urls(pool).await?);
+    let upload_dir = PathBuf::from(upload_dir);
+    let mut files = Vec::<PathBuf>::new();
+    collect_upload_image_files(&upload_dir, &mut files)?;
+
+    let mut deleted = 0;
+    let mut kept = 0;
+    let mut errors = Vec::<String>::new();
+
+    for file in files {
+        let relative = match file.strip_prefix(&upload_dir) {
+            Ok(path) => path.to_string_lossy().replace('\\', "/"),
+            Err(err) => {
+                errors.push(format!("{}: {}", file.display(), err));
+                continue;
+            }
+        };
+
+        if referenced.contains(&relative) {
+            kept += 1;
+            continue;
+        }
+
+        match fs::remove_file(&file) {
+            Ok(()) => deleted += 1,
+            Err(err) => errors.push(format!("{}: {}", file.display(), err)),
+        }
+    }
+
+    Ok(OrphanedImageCleanupResponse {
+        deleted,
+        kept,
+        errors,
+    })
+}
+
+fn referenced_upload_paths(urls: &[String]) -> HashSet<String> {
+    urls.iter()
+        .filter_map(|url| url.trim().strip_prefix("/uploads/"))
+        .map(|path| path.trim_start_matches('/').to_string())
+        .filter(|path| !path.is_empty() && !path.contains(".."))
+        .collect()
+}
+
+fn collect_upload_image_files(dir: &FsPath, files: &mut Vec<PathBuf>) -> Result<()> {
+    if !dir.exists() {
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        let file_type = entry.file_type()?;
+        if file_type.is_dir() {
+            collect_upload_image_files(&path, files)?;
+        } else if file_type.is_file() && is_cleanup_candidate_image(&path) {
+            files.push(path);
+        }
+    }
+
+    Ok(())
+}
+
+fn is_cleanup_candidate_image(path: &FsPath) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| {
+            matches!(
+                extension.to_ascii_lowercase().as_str(),
+                "jpg" | "jpeg" | "png" | "webp" | "gif"
+            )
+        })
+        .unwrap_or(false)
 }
 
 fn validate_candidate_identity(candidate: &AlbumCandidate) -> Result<()> {

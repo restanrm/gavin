@@ -9,6 +9,7 @@ A Rust + React web application for browsing and managing a family vinyl record l
 - **Search and filtering**: Real-time search with debouncing, genre filtering, and catalog sorting by artist, release date, last edit, or genre
 - **Authentication**: OIDC-based login integration
 - **Admin Controls**: 
+  - Collapsible admin panel with persisted browser state
   - Add individual vinyl records
   - Edit album information from catalog cards
   - Filter the catalog to albums with missing metadata for review
@@ -17,6 +18,7 @@ A Rust + React web application for browsing and managing a family vinyl record l
   - See exactly which metadata fields or lookup steps are missing in the edit dialog
   - Upload cover images
   - Bulk import via CSV
+  - Run collection-wide missing-metadata refreshes and orphaned upload image cleanup
   - Delete records
 - **Responsive Design**: Works seamlessly on mobile, tablet, and desktop
 - **Accessible**: WCAG 2.1 AA compliant with keyboard navigation support
@@ -175,12 +177,14 @@ The frontend expects the following API endpoints:
 - `PUT /api/admin/vinyls/:id` - Update vinyl record. Omit unchanged fields; send `null` for optional fields (`release_year`, `notes`, `cover_image_url`) to clear them. `cover_image_url` may be an absolute URL or a Gavin local `/uploads/...` path.
 - `POST /api/admin/vinyls/:id/metadata-candidate` - Apply a reviewed MusicBrainz candidate to an existing vinyl whose metadata needs a choice
 - `POST /api/admin/vinyls/:id/metadata-refresh` - Retry metadata enrichment for an existing vinyl after edits
+- `POST /api/admin/metadata/refresh-missing` - Retry metadata enrichment for all currently incomplete vinyl metadata rows
 - `DELETE /api/admin/vinyls/:id` - Delete vinyl record
 - `GET /api/admin/albums/search?artist=` - Search MusicBrainz albums by artist for manual selection
 - `POST /api/admin/vinyls/bulk` - Bulk import vinyls
 - `POST /api/admin/vinyls/import-cover` - Import a vinyl by uploading an album-cover photo (multipart/form-data)
 - `POST /api/admin/vinyls/import-cover-candidate` - Import a selected MusicBrainz candidate from cover-photo matching
 - `POST /api/admin/uploads` - Upload cover image (multipart/form-data)
+- `POST /api/admin/uploads/cleanup-orphans` - Delete uploaded/cached image files that are no longer referenced by any vinyl
 
 ### Data Types
 

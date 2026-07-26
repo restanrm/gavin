@@ -91,6 +91,14 @@ pub async fn create_router(
             "/admin/vinyls/bulk",
             post(handlers::admin::bulk_create_vinyls),
         )
+        .route(
+            "/admin/metadata/refresh-missing",
+            post(handlers::admin::refresh_missing_metadata),
+        )
+        .route(
+            "/admin/uploads/cleanup-orphans",
+            post(handlers::admin::cleanup_orphaned_images),
+        )
         .route("/admin/uploads", post(handlers::admin::upload_file))
         // Let handlers validate image sizes and return friendly errors instead
         // of failing multipart parsing at Axum's default 2MB body limit.

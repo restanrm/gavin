@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Daily album metadata maintenance job** that runs after startup and then periodically retries albums with pending, failed, not-found, or incomplete metadata and rechecks external cover caching.
 - **Album metadata retrieval logs** recording selected metadata matches and candidate-choice results when enrichment finds album information.
 - **Catalog sorting and genre filtering** with server-side sorting by release date, last edit time, or genre, plus genre dropdown filtering in the catalog controls.
+- **Collapsible admin panel** with browser-persisted state and maintenance actions for refreshing missing metadata and cleaning orphaned uploaded/cached images.
 - **Missing metadata details** in the album edit dialog showing which metadata fields or lookup steps still need attention.
 
 ### Fixed

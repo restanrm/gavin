@@ -525,6 +525,22 @@ impl Vinyl {
         Ok(covers)
     }
 
+    /// Stored cover URLs, used to protect images still referenced by a vinyl.
+    pub async fn list_cover_image_urls(pool: &SqlitePool) -> Result<Vec<String>> {
+        let urls = sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT cover_image_url
+            FROM vinyls
+            WHERE cover_image_url IS NOT NULL
+              AND TRIM(cover_image_url) != ''
+            "#,
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok(urls)
+    }
+
     /// IDs for vinyls that need a best-effort metadata lookup.
     pub async fn list_requiring_metadata(pool: &SqlitePool, limit: i64) -> Result<Vec<String>> {
         let ids = sqlx::query_scalar::<_, String>(

@@ -10,6 +10,16 @@ type VinylUpdateInput = Partial<{
   cover_image_url: string | null;
 }>;
 
+export interface MetadataRefreshResponse {
+  checked: number;
+}
+
+export interface OrphanedImageCleanupResponse {
+  deleted: number;
+  kept: number;
+  errors: string[];
+}
+
 const BASE_URL = '/api';
 
 async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
@@ -95,6 +105,18 @@ export async function updateVinyl(id: string, vinyl: VinylUpdateInput): Promise<
 
 export async function refreshVinylMetadata(id: string): Promise<Vinyl> {
   return fetchJSON<Vinyl>(`${BASE_URL}/admin/vinyls/${id}/metadata-refresh`, {
+    method: 'POST',
+  });
+}
+
+export async function refreshMissingMetadata(): Promise<MetadataRefreshResponse> {
+  return fetchJSON<MetadataRefreshResponse>(`${BASE_URL}/admin/metadata/refresh-missing`, {
+    method: 'POST',
+  });
+}
+
+export async function cleanupOrphanedImages(): Promise<OrphanedImageCleanupResponse> {
+  return fetchJSON<OrphanedImageCleanupResponse>(`${BASE_URL}/admin/uploads/cleanup-orphans`, {
     method: 'POST',
   });
 }
