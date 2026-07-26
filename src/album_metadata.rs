@@ -106,6 +106,21 @@ impl AlbumMetadataClient {
 
         match self.lookup(&vinyl.artist, &vinyl.title).await {
             Ok(LookupOutcome::Selected(candidate)) => {
+                tracing::info!(
+                    vinyl_id,
+                    requested_artist = %vinyl.artist,
+                    requested_title = %vinyl.title,
+                    metadata_source = SOURCE_NAME,
+                    metadata_source_id = %candidate.id,
+                    metadata_artist = %candidate.artist,
+                    metadata_title = %candidate.title,
+                    metadata_release_year = ?candidate.release_year,
+                    metadata_genre = ?candidate.genre,
+                    metadata_cover_found = candidate.cover_image_url.is_some(),
+                    metadata_source_url = %candidate.source_url,
+                    "album metadata retrieved"
+                );
+
                 let update = MetadataUpdate {
                     release_year: vinyl.release_year.or(candidate.release_year),
                     genre: vinyl.genre.or(candidate.genre.clone()),
@@ -122,6 +137,15 @@ impl AlbumMetadataClient {
                 Vinyl::update_metadata(pool, vinyl_id, update).await?;
             }
             Ok(LookupOutcome::NeedsChoice(candidates)) => {
+                tracing::info!(
+                    vinyl_id,
+                    requested_artist = %vinyl.artist,
+                    requested_title = %vinyl.title,
+                    metadata_source = SOURCE_NAME,
+                    candidate_count = candidates.len(),
+                    "album metadata candidates retrieved"
+                );
+
                 let candidates_json = serde_json::to_string(&candidates).map_err(|err| {
                     AppError::Internal(anyhow::anyhow!("failed to serialize candidates: {err}"))
                 })?;

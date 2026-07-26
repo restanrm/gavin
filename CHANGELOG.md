@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Edit-dialog metadata refresh action** that saves the current album edits and retries metadata enrichment immediately.
 - **Album genre support** with SQLite storage, manual add/edit fields, catalog/detail display, CSV import support, MusicBrainz genre/tag enrichment, and missing-metadata filtering for albums without a genre.
 - **Daily album metadata maintenance job** that runs after startup and then periodically retries albums with pending, failed, not-found, or incomplete metadata and rechecks external cover caching.
+- **Album metadata retrieval logs** recording selected metadata matches and candidate-choice results when enrichment finds album information.
 - **Missing metadata details** in the album edit dialog showing which metadata fields or lookup steps still need attention.
 
 ### Fixed
