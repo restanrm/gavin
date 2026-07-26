@@ -93,6 +93,39 @@ describe('VinylCard', () => {
     expect(screen.getByLabelText(/delete abbey road/i)).toBeInTheDocument();
   });
 
+  it('saves local cover image paths from cached metadata', async () => {
+    const onUpdate = vi.fn();
+    const localCoverVinyl: Vinyl = {
+      ...mockVinyl,
+      cover_image_url: '/uploads/album-covers/abbey-road.jpg',
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => localCoverVinyl,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<VinylCard vinyl={localCoverVinyl} isAdmin onUpdate={onUpdate} />);
+
+    fireEvent.click(screen.getByLabelText(/edit abbey road/i));
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(onUpdate).toHaveBeenCalled());
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/admin/vinyls/1',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({
+          artist: 'The Beatles',
+          title: 'Abbey Road',
+          release_year: 1969,
+          notes: 'Final studio album',
+          cover_image_url: '/uploads/album-covers/abbey-road.jpg',
+        }),
+      }),
+    );
+  });
+
   it('shows missing metadata details in the album editor', () => {
     const pending: Vinyl = {
       ...mockVinyl,

@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Edit-dialog metadata refresh action** that saves the current album edits and retries metadata enrichment immediately.
 - **Missing metadata details** in the album edit dialog showing which metadata fields or lookup steps still need attention.
 
+### Fixed
+- **Cached cover path editing**: the edit-dialog cover image field now accepts Gavin local `/uploads/...` paths as well as absolute URLs, so albums with locally cached covers can still be saved after manual edits.
+
 ## [0.2.4] - 2026-07-26
 
 ### Added

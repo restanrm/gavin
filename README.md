@@ -171,7 +171,7 @@ The frontend expects the following API endpoints:
 ### Admin Endpoints (require authentication)
 
 - `POST /api/admin/vinyls` - Create vinyl record
-- `PUT /api/admin/vinyls/:id` - Update vinyl record. Omit unchanged fields; send `null` for optional fields (`release_year`, `notes`, `cover_image_url`) to clear them.
+- `PUT /api/admin/vinyls/:id` - Update vinyl record. Omit unchanged fields; send `null` for optional fields (`release_year`, `notes`, `cover_image_url`) to clear them. `cover_image_url` may be an absolute URL or a Gavin local `/uploads/...` path.
 - `POST /api/admin/vinyls/:id/metadata-candidate` - Apply a reviewed MusicBrainz candidate to an existing vinyl whose metadata needs a choice
 - `POST /api/admin/vinyls/:id/metadata-refresh` - Retry metadata enrichment for an existing vinyl after edits
 - `DELETE /api/admin/vinyls/:id` - Delete vinyl record

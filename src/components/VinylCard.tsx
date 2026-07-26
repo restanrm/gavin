@@ -701,16 +701,17 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
 
                   <div className="form-group">
                     <label htmlFor={`edit-cover-url-${vinyl.id}`} className="form-label">
-                      Cover Image URL
+                      Cover Image URL or local path
                     </label>
                     <input
                       id={`edit-cover-url-${vinyl.id}`}
-                      type="url"
+                      type="text"
+                      inputMode="url"
                       value={coverImageUrl}
                       onChange={(event) => setCoverImageUrl(event.target.value)}
                       disabled={submitting}
                       className="form-input"
-                      placeholder="https://example.com/cover.jpg"
+                      placeholder="https://example.com/cover.jpg or /uploads/album-covers/cover.jpg"
                     />
                   </div>
 
