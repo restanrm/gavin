@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-07-26
+
 ### Added
 - **Footer library stats counter** showing compact album, artist, year range, cover, and admin metadata-review counts at the bottom of the page.
 - **French vinyl retailer metadata hints** using FNAC and Cultura search pages as best-effort fallbacks before marking album metadata as not found.
@@ -192,7 +194,8 @@ The workflow:
 
 For local preparation only, use `VERSION=0.2.0 mise run release:prepare`.
 
-[Unreleased]: https://github.com/restanrm/gavin/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/restanrm/gavin/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/restanrm/gavin/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/restanrm/gavin/compare/v0.2.1...v0.2.3
 [0.2.1]: https://github.com/restanrm/gavin/compare/v0.1.0...v0.2.1
 [0.1.0]: https://github.com/restanrm/gavin/releases/tag/v0.1.0
