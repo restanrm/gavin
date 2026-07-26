@@ -12,6 +12,7 @@ const vinyls: Vinyl[] = [
     genre: 'Rock',
     cover_image_url: 'https://example.com/abbey.jpg',
     created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
     metadata_status: 'complete',
   },
   {
@@ -20,6 +21,7 @@ const vinyls: Vinyl[] = [
     title: 'Kind of Blue',
     release_year: 1959,
     created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
     metadata_status: 'needs_choice',
   },
   {
@@ -30,6 +32,7 @@ const vinyls: Vinyl[] = [
     genre: 'Rock',
     cover_image_url: 'https://example.com/revolver.jpg',
     created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
     metadata_status: 'complete',
   },
 ];

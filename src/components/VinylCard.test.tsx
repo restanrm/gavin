@@ -16,6 +16,7 @@ describe('VinylCard', () => {
     notes: 'Final studio album',
     cover_image_url: 'https://example.com/cover.jpg',
     created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
     metadata_status: 'complete',
   };
 
@@ -277,6 +278,7 @@ describe('VinylCard', () => {
       artist: 'Pink Floyd',
       title: 'The Wall',
       created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
       metadata_status: 'pending',
     };
 

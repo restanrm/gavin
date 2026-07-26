@@ -132,10 +132,36 @@
   box-shadow: var(--shadow-md);
 }
 
-.admin-catalog-filters {
+.catalog-controls {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
+  align-items: center;
+  gap: var(--spacing-sm);
   margin-top: var(--spacing-md);
+}
+
+.catalog-control {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  font-weight: 600;
+}
+
+.catalog-select {
+  max-width: 11rem;
+  color: var(--color-text);
+  background-color: var(--color-bg-alt);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 0.25rem 0.5rem;
+  font: inherit;
 }
 
 .metadata-filter-toggle {

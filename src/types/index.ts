@@ -7,6 +7,7 @@ export interface Vinyl {
   notes?: string | null;
   cover_image_url?: string | null;
   created_at: string;
+  updated_at: string;
   metadata_status: 'pending' | 'complete' | 'needs_choice' | 'not_found' | 'error' | 'disabled';
   metadata_source?: string | null;
   metadata_source_id?: string | null;
@@ -15,6 +16,8 @@ export interface Vinyl {
   metadata_error?: string | null;
   metadata_checked_at?: string | null;
 }
+
+export type VinylSort = 'artist' | 'date' | 'last_edit' | 'genre';
 
 export interface AlbumTrack {
   disc_number?: number | null;

@@ -9,17 +9,22 @@ import { VinylCatalog } from './components/VinylCatalog';
 import { AdminPanel } from './components/AdminPanel';
 import { LibraryStats } from './components/LibraryStats';
 import { hasMissingMetadata } from './utils/metadata';
+import type { VinylSort } from './types';
 import './App.css';
 
 function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showMissingMetadataOnly, setShowMissingMetadataOnly] = useState(false);
+  const [selectedGenre, setSelectedGenre] = useState('');
+  const [sortBy, setSortBy] = useState<VinylSort>('artist');
   const debouncedSearch = useDebounce(searchQuery, 300);
   
   const { isAuthenticated, user, loading: authLoading, refreshAuth } = useAuth();
   const metadataFilterEnabled = isAuthenticated && showMissingMetadataOnly;
   const { vinyls, loading: vinylsLoading, error, refetch } = useVinyls(debouncedSearch, {
     missingMetadataOnly: metadataFilterEnabled,
+    genre: selectedGenre,
+    sort: sortBy,
   });
   const {
     vinyls: libraryVinyls,
@@ -40,13 +45,21 @@ function App() {
   };
 
   const searchIsActive = debouncedSearch.trim().length > 0;
-  const catalogFilterIsActive = searchIsActive || metadataFilterEnabled;
+  const genreFilterIsActive = selectedGenre.trim().length > 0;
+  const catalogFilterIsActive = searchIsActive || metadataFilterEnabled || genreFilterIsActive;
   const missingMetadataCount = vinyls.filter(hasMissingMetadata).length;
+  const genres = Array.from(new Set(
+    libraryVinyls
+      .map((vinyl) => vinyl.genre?.trim())
+      .filter((genre): genre is string => Boolean(genre)),
+  )).sort((left, right) => left.localeCompare(right));
   const emptyCatalogMessage = metadataFilterEnabled
-    ? searchIsActive
-      ? 'No albums with missing metadata match your search.'
+    ? searchIsActive || genreFilterIsActive
+      ? 'No albums with missing metadata match your filters.'
       : 'No albums with missing metadata found.'
-    : undefined;
+    : genreFilterIsActive
+      ? `No albums found for ${selectedGenre}.`
+      : undefined;
   const statsVinyls = catalogFilterIsActive ? libraryVinyls : vinyls;
   const statsLoading = catalogFilterIsActive ? libraryStatsLoading : vinylsLoading;
   const statsError = catalogFilterIsActive ? libraryStatsError : error;
@@ -80,8 +93,36 @@ function App() {
             placeholder="Search by artist or title..."
           />
 
-          {isAuthenticated && (
-            <div className="admin-catalog-filters" aria-label="Admin catalog filters">
+          <div className="catalog-controls" aria-label="Catalog controls">
+            <label className="catalog-control">
+              <span>Sort by</span>
+              <select
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value as VinylSort)}
+                className="catalog-select"
+              >
+                <option value="artist">Artist / title</option>
+                <option value="date">Release date</option>
+                <option value="last_edit">Last edit</option>
+                <option value="genre">Genre</option>
+              </select>
+            </label>
+
+            <label className="catalog-control">
+              <span>Genre</span>
+              <select
+                value={selectedGenre}
+                onChange={(event) => setSelectedGenre(event.target.value)}
+                className="catalog-select"
+              >
+                <option value="">All genres</option>
+                {genres.map((genre) => (
+                  <option key={genre} value={genre}>{genre}</option>
+                ))}
+              </select>
+            </label>
+
+            {isAuthenticated && (
               <label className="metadata-filter-toggle">
                 <input
                   type="checkbox"
@@ -93,8 +134,8 @@ function App() {
                   {missingMetadataCount}
                 </span>
               </label>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {isAuthenticated && (

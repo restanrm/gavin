@@ -1,5 +1,1 @@
-- sort by last edit
-- sort by date
-- show genre of music
-- commits on main trigger build deployment and push latest docker image. 
 - cleanup orphaned images

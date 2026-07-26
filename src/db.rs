@@ -18,6 +18,7 @@ pub struct Vinyl {
     pub notes: Option<String>,
     pub cover_image_url: Option<String>,
     pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
     pub metadata_status: String,
     pub metadata_source: Option<String>,
     pub metadata_source_id: Option<String>,
@@ -137,6 +138,8 @@ impl Vinyl {
         pool: &SqlitePool,
         search: Option<String>,
         missing_metadata_only: bool,
+        genre_filter: Option<String>,
+        sort: Option<String>,
     ) -> Result<Vec<Self>> {
         let mut vinyls = if let Some(search_term) = search {
             let trimmed = search_term.trim().to_lowercase();
@@ -144,7 +147,7 @@ impl Vinyl {
                 // Empty search, fetch all
                 sqlx::query_as::<_, Vinyl>(
                     r#"
-                    SELECT id, artist, title, release_year, genre, notes, cover_image_url, created_at,
+                    SELECT id, artist, title, release_year, genre, notes, cover_image_url, created_at, updated_at,
                            metadata_status, metadata_source, metadata_source_id, metadata_source_url,
                            metadata_candidates, metadata_error, metadata_checked_at
                     FROM vinyls
@@ -161,7 +164,7 @@ impl Vinyl {
 
                 sqlx::query_as::<_, Vinyl>(
                     r#"
-                    SELECT id, artist, title, release_year, genre, notes, cover_image_url, created_at,
+                    SELECT id, artist, title, release_year, genre, notes, cover_image_url, created_at, updated_at,
                            metadata_status, metadata_source, metadata_source_id, metadata_source_url,
                            metadata_candidates, metadata_error, metadata_checked_at
                     FROM vinyls
@@ -182,7 +185,7 @@ impl Vinyl {
         } else {
             sqlx::query_as::<_, Vinyl>(
                 r#"
-                SELECT id, artist, title, release_year, genre, notes, cover_image_url, created_at,
+                SELECT id, artist, title, release_year, genre, notes, cover_image_url, created_at, updated_at,
                        metadata_status, metadata_source, metadata_source_id, metadata_source_url,
                        metadata_candidates, metadata_error, metadata_checked_at
                 FROM vinyls
@@ -205,6 +208,17 @@ impl Vinyl {
             });
         }
 
+        if let Some(genre_filter) = genre_filter.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+            vinyls.retain(|vinyl| {
+                vinyl
+                    .genre
+                    .as_deref()
+                    .is_some_and(|genre| genre.eq_ignore_ascii_case(genre_filter))
+            });
+        }
+
+        sort_vinyls(&mut vinyls, sort.as_deref());
+
         Ok(vinyls)
     }
 
@@ -212,7 +226,7 @@ impl Vinyl {
     pub async fn get(pool: &SqlitePool, id: &str) -> Result<Self> {
         let vinyl = sqlx::query_as::<_, Vinyl>(
             r#"
-            SELECT id, artist, title, release_year, genre, notes, cover_image_url, created_at,
+            SELECT id, artist, title, release_year, genre, notes, cover_image_url, created_at, updated_at,
                    metadata_status, metadata_source, metadata_source_id, metadata_source_url,
                    metadata_candidates, metadata_error, metadata_checked_at
             FROM vinyls
@@ -245,9 +259,9 @@ impl Vinyl {
         sqlx::query(
             r#"
             INSERT INTO vinyls (
-                id, artist, title, release_year, genre, notes, cover_image_url, created_at, metadata_status
+                id, artist, title, release_year, genre, notes, cover_image_url, created_at, updated_at, metadata_status
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
             "#,
         )
         .bind(&id)
@@ -257,6 +271,7 @@ impl Vinyl {
         .bind(&input.genre)
         .bind(&input.notes)
         .bind(&input.cover_image_url)
+        .bind(now)
         .bind(now)
         .bind(&metadata_status)
         .execute(pool)
@@ -271,6 +286,7 @@ impl Vinyl {
             notes: input.notes,
             cover_image_url: input.cover_image_url,
             created_at: now,
+            updated_at: now,
             metadata_status,
             metadata_source: None,
             metadata_source_id: None,
@@ -374,6 +390,8 @@ impl Vinyl {
             )
         };
 
+        let updated_at = Utc::now();
+
         sqlx::query(
             r#"
             UPDATE vinyls
@@ -389,8 +407,9 @@ impl Vinyl {
                 metadata_source_url = ?10,
                 metadata_candidates = ?11,
                 metadata_error = ?12,
-                metadata_checked_at = ?13
-            WHERE id = ?14
+                metadata_checked_at = ?13,
+                updated_at = ?14
+            WHERE id = ?15
             "#,
         )
         .bind(&artist)
@@ -406,6 +425,7 @@ impl Vinyl {
         .bind(&metadata_candidates)
         .bind(&metadata_error)
         .bind(metadata_checked_at)
+        .bind(updated_at)
         .bind(id)
         .execute(pool)
         .await?;
@@ -428,8 +448,9 @@ impl Vinyl {
                 metadata_source_url = ?8,
                 metadata_candidates = ?9,
                 metadata_error = ?10,
-                metadata_checked_at = ?11
-            WHERE id = ?12
+                metadata_checked_at = ?11,
+                updated_at = ?12
+            WHERE id = ?13
             "#,
         )
         .bind(input.release_year)
@@ -443,6 +464,7 @@ impl Vinyl {
         .bind(&input.metadata_candidates)
         .bind(&input.metadata_error)
         .bind(input.metadata_checked_at)
+        .bind(Utc::now())
         .bind(id)
         .execute(pool)
         .await?;
@@ -463,11 +485,13 @@ impl Vinyl {
         let result = sqlx::query(
             r#"
             UPDATE vinyls
-            SET cover_image_url = ?1
-            WHERE id = ?2
+            SET cover_image_url = ?1,
+                updated_at = ?2
+            WHERE id = ?3
             "#,
         )
         .bind(cover_image_url)
+        .bind(Utc::now())
         .bind(id)
         .execute(pool)
         .await?;
@@ -537,6 +561,42 @@ impl Vinyl {
     }
 }
 
+fn sort_vinyls(vinyls: &mut [Vinyl], sort: Option<&str>) {
+    match sort.unwrap_or_default().trim().to_ascii_lowercase().as_str() {
+        "date" | "release_date" | "release_year" => vinyls.sort_by(|left, right| {
+            right
+                .release_year
+                .unwrap_or(i32::MIN)
+                .cmp(&left.release_year.unwrap_or(i32::MIN))
+                .then_with(|| compare_artist_title(left, right))
+        }),
+        "last_edit" | "updated_at" => vinyls.sort_by(|left, right| {
+            right
+                .updated_at
+                .cmp(&left.updated_at)
+                .then_with(|| compare_artist_title(left, right))
+        }),
+        "genre" => vinyls.sort_by(|left, right| {
+            let left_genre = left.genre.as_deref().map(str::to_lowercase);
+            let right_genre = right.genre.as_deref().map(str::to_lowercase);
+
+            left_genre
+                .is_none()
+                .cmp(&right_genre.is_none())
+                .then_with(|| left_genre.cmp(&right_genre))
+                .then_with(|| compare_artist_title(left, right))
+        }),
+        _ => vinyls.sort_by(compare_artist_title),
+    }
+}
+
+fn compare_artist_title(left: &Vinyl, right: &Vinyl) -> std::cmp::Ordering {
+    left.artist
+        .to_lowercase()
+        .cmp(&right.artist.to_lowercase())
+        .then_with(|| left.title.to_lowercase().cmp(&right.title.to_lowercase()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -556,6 +616,7 @@ mod tests {
                 notes TEXT,
                 cover_image_url TEXT,
                 created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
                 metadata_status TEXT NOT NULL DEFAULT 'pending',
                 metadata_source TEXT,
                 metadata_source_id TEXT,
@@ -645,22 +706,22 @@ mod tests {
         .unwrap();
 
         // Search lowercase
-        let results = Vinyl::list(&pool, Some("beatles".to_string()), false).await.unwrap();
+        let results = Vinyl::list(&pool, Some("beatles".to_string()), false, None, None).await.unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].artist, "The Beatles");
 
         // Search uppercase
-        let results = Vinyl::list(&pool, Some("PINK".to_string()), false).await.unwrap();
+        let results = Vinyl::list(&pool, Some("PINK".to_string()), false, None, None).await.unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].artist, "Pink Floyd");
 
         // Search title
-        let results = Vinyl::list(&pool, Some("wall".to_string()), false).await.unwrap();
+        let results = Vinyl::list(&pool, Some("wall".to_string()), false, None, None).await.unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].title, "The Wall");
 
         // Search with whitespace
-        let results = Vinyl::list(&pool, Some("  floyd  ".to_string()), false).await.unwrap();
+        let results = Vinyl::list(&pool, Some("  floyd  ".to_string()), false, None, None).await.unwrap();
         assert_eq!(results.len(), 1);
     }
 
@@ -696,10 +757,101 @@ mod tests {
         .await
         .unwrap();
 
-        let results = Vinyl::list(&pool, None, false).await.unwrap();
+        let results = Vinyl::list(&pool, None, false, None, None).await.unwrap();
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].artist, "Beatles");
         assert_eq!(results[1].artist, "Zeppelin");
+    }
+
+    #[tokio::test]
+    async fn test_list_filters_and_sorts() {
+        let pool = setup_test_db().await;
+
+        let jazz = Vinyl::create(
+            &pool,
+            CreateVinyl {
+                artist: "Miles Davis".to_string(),
+                title: "Kind of Blue".to_string(),
+                release_year: Some(1959),
+                genre: Some("Jazz".to_string()),
+                notes: None,
+                cover_image_url: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let rock = Vinyl::create(
+            &pool,
+            CreateVinyl {
+                artist: "Pink Floyd".to_string(),
+                title: "The Wall".to_string(),
+                release_year: Some(1979),
+                genre: Some("Rock".to_string()),
+                notes: None,
+                cover_image_url: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let rap = Vinyl::create(
+            &pool,
+            CreateVinyl {
+                artist: "IAM".to_string(),
+                title: "L'école du micro d'argent".to_string(),
+                release_year: Some(1997),
+                genre: Some("Rap".to_string()),
+                notes: None,
+                cover_image_url: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let by_date = Vinyl::list(&pool, None, false, None, Some("date".to_string()))
+            .await
+            .unwrap();
+        assert_eq!(
+            by_date.iter().map(|vinyl| vinyl.id.as_str()).collect::<Vec<_>>(),
+            vec![rap.id.as_str(), rock.id.as_str(), jazz.id.as_str()]
+        );
+
+        let by_genre = Vinyl::list(&pool, None, false, None, Some("genre".to_string()))
+            .await
+            .unwrap();
+        assert_eq!(
+            by_genre
+                .iter()
+                .map(|vinyl| vinyl.genre.as_deref().unwrap_or_default())
+                .collect::<Vec<_>>(),
+            vec!["Jazz", "Rap", "Rock"]
+        );
+
+        let only_rock = Vinyl::list(&pool, None, false, Some("rock".to_string()), None)
+            .await
+            .unwrap();
+        assert_eq!(only_rock.len(), 1);
+        assert_eq!(only_rock[0].id, rock.id);
+
+        Vinyl::update(
+            &pool,
+            &jazz.id,
+            UpdateVinyl {
+                artist: PatchField::Missing,
+                title: PatchField::Missing,
+                release_year: PatchField::Missing,
+                genre: PatchField::Missing,
+                notes: PatchField::Value("Recently edited".to_string()),
+                cover_image_url: PatchField::Missing,
+            },
+        )
+        .await
+        .unwrap();
+        let by_last_edit = Vinyl::list(&pool, None, false, None, Some("last_edit".to_string()))
+            .await
+            .unwrap();
+        assert_eq!(by_last_edit[0].id, jazz.id);
     }
 
     #[tokio::test]
@@ -754,7 +906,7 @@ mod tests {
         .await
         .unwrap();
 
-        let results = Vinyl::list(&pool, None, true).await.unwrap();
+        let results = Vinyl::list(&pool, None, true, None, None).await.unwrap();
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].id, pending.id);

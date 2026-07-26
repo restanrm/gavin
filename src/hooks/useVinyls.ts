@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getVinyls } from '../utils/api';
-import type { Vinyl } from '../types';
+import type { Vinyl, VinylSort } from '../types';
 
 interface UseVinylsOptions {
   missingMetadataOnly?: boolean;
+  genre?: string;
+  sort?: VinylSort;
 }
 
 export function useVinyls(search?: string, options: UseVinylsOptions = {}) {
-  const { missingMetadataOnly = false } = options;
+  const { missingMetadataOnly = false, genre, sort } = options;
   const [vinyls, setVinyls] = useState<Vinyl[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -15,7 +17,7 @@ export function useVinyls(search?: string, options: UseVinylsOptions = {}) {
   const fetchVinyls = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getVinyls(search, { missingMetadataOnly });
+      const data = await getVinyls(search, { missingMetadataOnly, genre, sort });
       setVinyls(data);
       setError(null);
     } catch (err) {
@@ -24,7 +26,7 @@ export function useVinyls(search?: string, options: UseVinylsOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [search, missingMetadataOnly]);
+  }, [search, missingMetadataOnly, genre, sort]);
 
   useEffect(() => {
     fetchVinyls();

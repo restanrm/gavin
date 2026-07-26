@@ -1,6 +1,6 @@
-import type { Vinyl, User, UploadResponse, BulkImportItem, AlbumCandidate, CoverImportResponse, AlbumDetails } from '../types';
+import type { Vinyl, User, UploadResponse, BulkImportItem, AlbumCandidate, CoverImportResponse, AlbumDetails, VinylSort } from '../types';
 
-type VinylInput = Pick<Vinyl, 'artist' | 'title' | 'release_year' | 'notes' | 'cover_image_url'>;
+type VinylInput = Pick<Vinyl, 'artist' | 'title' | 'release_year' | 'genre' | 'notes' | 'cover_image_url'>;
 type VinylUpdateInput = Partial<{
   artist: string;
   title: string;
@@ -39,6 +39,8 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
 
 interface VinylListOptions {
   missingMetadataOnly?: boolean;
+  genre?: string;
+  sort?: VinylSort;
 }
 
 export async function getVinyls(search?: string, options: VinylListOptions = {}): Promise<Vinyl[]> {
@@ -48,6 +50,12 @@ export async function getVinyls(search?: string, options: VinylListOptions = {})
   }
   if (options.missingMetadataOnly) {
     params.set('metadata', 'missing');
+  }
+  if (options.genre) {
+    params.set('genre', options.genre);
+  }
+  if (options.sort && options.sort !== 'artist') {
+    params.set('sort', options.sort);
   }
 
   const query = params.toString();
