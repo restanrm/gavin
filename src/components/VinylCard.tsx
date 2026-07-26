@@ -6,6 +6,7 @@ import {
   selectVinylMetadataCandidate,
   updateVinyl,
 } from '../utils/api';
+import { missingMetadataItems } from '../utils/metadata';
 import { ImageUpload } from './ImageUpload';
 
 interface VinylCardProps {
@@ -220,6 +221,7 @@ function MetadataDetails({
   onSelectCandidate?: (candidate: AlbumCandidate) => Promise<void>;
 }) {
   const candidates = parseCandidates(vinyl.metadata_candidates);
+  const missingItems = missingMetadataItems(vinyl);
   const [selectingId, setSelectingId] = useState<string | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
 
@@ -250,6 +252,16 @@ function MetadataDetails({
         <p className="metadata-review-help">
           This album needs admin review before its metadata is complete.
         </p>
+      )}
+      {missingItems.length > 0 && (
+        <div className="metadata-missing-list">
+          <p>Missing or incomplete:</p>
+          <ul>
+            {missingItems.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
       )}
       {vinyl.metadata_source_url && (
         <p className="metadata-source">

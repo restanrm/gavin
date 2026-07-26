@@ -13,6 +13,7 @@ A Rust + React web application for browsing and managing a family vinyl record l
   - Edit album information from catalog cards
   - Filter the catalog to albums with missing metadata for review
   - Save edited album information and retry metadata enrichment from the edit dialog
+  - See exactly which metadata fields or lookup steps are missing in the edit dialog
   - Upload cover images
   - Bulk import via CSV
   - Delete records

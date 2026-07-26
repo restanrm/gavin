@@ -778,9 +778,28 @@
 .metadata-review-help,
 .metadata-source,
 .metadata-checked,
-.metadata-candidates {
+.metadata-candidates,
+.metadata-missing-list {
   margin-top: var(--spacing-sm);
   font-size: 0.8125rem;
+}
+
+.metadata-missing-list {
+  padding: var(--spacing-sm);
+  color: var(--color-warning-text);
+  background-color: color-mix(in srgb, var(--color-warning-bg) 62%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-warning-text) 30%, transparent);
+  border-radius: var(--radius-md);
+}
+
+.metadata-missing-list p {
+  margin-bottom: var(--spacing-xs);
+  font-weight: 700;
+}
+
+.metadata-missing-list ul {
+  margin: 0;
+  padding-left: var(--spacing-lg);
 }
 
 .metadata-review-help {

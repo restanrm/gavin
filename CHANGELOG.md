@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Admin metadata-missing catalog filter** to show only albums whose metadata still needs review or retry.
 - **Edit-dialog metadata refresh action** that saves the current album edits and retries metadata enrichment immediately.
+- **Missing metadata details** in the album edit dialog showing which metadata fields or lookup steps still need attention.
 
 ## [0.2.4] - 2026-07-26
 

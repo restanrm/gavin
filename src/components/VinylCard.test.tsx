@@ -93,6 +93,24 @@ describe('VinylCard', () => {
     expect(screen.getByLabelText(/delete abbey road/i)).toBeInTheDocument();
   });
 
+  it('shows missing metadata details in the album editor', () => {
+    const pending: Vinyl = {
+      ...mockVinyl,
+      release_year: null,
+      cover_image_url: null,
+      metadata_status: 'pending',
+    };
+
+    render(<VinylCard vinyl={pending} isAdmin onUpdate={() => {}} />);
+
+    fireEvent.click(screen.getByLabelText(/edit abbey road/i));
+
+    expect(screen.getByText('Missing or incomplete:')).toBeInTheDocument();
+    expect(screen.getByText('Metadata lookup has not run yet')).toBeInTheDocument();
+    expect(screen.getByText('Release year')).toBeInTheDocument();
+    expect(screen.getByText('Cover image')).toBeInTheDocument();
+  });
+
   it('hides metadata choices from the catalog card until editing', () => {
     const needsChoice: Vinyl = {
       ...mockVinyl,
