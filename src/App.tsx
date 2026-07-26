@@ -49,9 +49,7 @@ function App() {
   const catalogFilterIsActive = searchIsActive || metadataFilterEnabled || genreFilterIsActive;
   const missingMetadataCount = vinyls.filter(hasMissingMetadata).length;
   const genres = Array.from(new Set(
-    libraryVinyls
-      .map((vinyl) => vinyl.genre?.trim())
-      .filter((genre): genre is string => Boolean(genre)),
+    libraryVinyls.flatMap((vinyl) => vinyl.genre ?? []),
   )).sort((left, right) => left.localeCompare(right));
   const emptyCatalogMessage = metadataFilterEnabled
     ? searchIsActive || genreFilterIsActive

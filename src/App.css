@@ -647,21 +647,33 @@
   margin-bottom: var(--spacing-sm);
 }
 
-.vinyl-year,
-.vinyl-genre {
+.vinyl-year {
   font-size: 0.875rem;
   color: var(--color-text-muted);
   margin-bottom: var(--spacing-sm);
 }
 
-.vinyl-genre {
+.genre-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: var(--spacing-sm);
+}
+
+.genre-tag {
   display: inline-flex;
   width: fit-content;
   padding: 0.125rem 0.5rem;
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background-color: var(--color-bg-alt);
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
   font-weight: 600;
+}
+
+.album-detail-field .genre-tags {
+  margin-bottom: 0;
 }
 
 .vinyl-notes {
@@ -1184,11 +1196,15 @@
 
   .vinyl-artist,
   .vinyl-year,
-  .vinyl-genre,
+  .genre-tags,
   .vinyl-notes {
     margin-bottom: var(--spacing-xs);
     font-size: 0.8125rem;
     line-height: 1.3;
+  }
+
+  .genre-tag {
+    font-size: 0.75rem;
   }
 
   .vinyl-notes {

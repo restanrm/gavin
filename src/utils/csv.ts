@@ -1,4 +1,5 @@
 import type { BulkImportItem } from '../types';
+import { parseGenreInput } from './genres';
 
 export interface ParseResult {
   items: BulkImportItem[];
@@ -69,7 +70,7 @@ export function parseCSV(text: string): ParseResult {
 
     // Add optional genre
     if (genre && genre.length > 0) {
-      item.genre = genre;
+      item.genre = parseGenreInput(genre) ?? undefined;
     }
 
     items.push(item);

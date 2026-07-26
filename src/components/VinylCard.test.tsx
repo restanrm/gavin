@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { VinylCard } from '../components/VinylCard';
 import type { Vinyl } from '../types';
 
@@ -35,6 +35,15 @@ describe('VinylCard', () => {
     const img = screen.getByAltText('Abbey Road album cover');
     expect(img).toBeInTheDocument();
     expect(img).toHaveAttribute('src', 'https://example.com/cover.jpg');
+  });
+
+  it('renders each genre as its own tag', () => {
+    render(<VinylCard vinyl={{ ...mockVinyl, genre: ['Rock', 'Pop'] }} />);
+
+    const card = within(screen.getByRole('article'));
+    expect(card.getByText('Rock')).toHaveClass('genre-tag');
+    expect(card.getByText('Pop')).toHaveClass('genre-tag');
+    expect(card.queryByText('Rock, Pop')).not.toBeInTheDocument();
   });
 
   it('hides generated metadata notes from the catalog card', () => {
@@ -99,6 +108,39 @@ describe('VinylCard', () => {
 
     expect(screen.getByText('Missing metadata')).toBeInTheDocument();
     expect(screen.getByLabelText(/edit abbey road and review metadata/i)).toBeInTheDocument();
+  });
+
+  it('splits comma-separated genres when saving edits', async () => {
+    const onUpdate = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ...mockVinyl, genre: ['Rock', 'Pop'] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<VinylCard vinyl={{ ...mockVinyl, genre: ['Rock'] }} isAdmin onUpdate={onUpdate} />);
+
+    fireEvent.click(screen.getByLabelText(/edit abbey road/i));
+    fireEvent.change(screen.getByLabelText(/^genre$/i), {
+      target: { value: 'Rock, Pop, rock' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(onUpdate).toHaveBeenCalled());
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/admin/vinyls/1',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({
+          artist: 'The Beatles',
+          title: 'Abbey Road',
+          release_year: 1969,
+          genre: ['Rock', 'Pop'],
+          notes: 'Final studio album',
+          cover_image_url: 'https://example.com/cover.jpg',
+        }),
+      }),
+    );
   });
 
   it('saves local cover image paths from cached metadata', async () => {

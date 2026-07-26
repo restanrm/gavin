@@ -1,7 +1,7 @@
 //! Database models and operations
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use sqlx::{FromRow, SqlitePool};
 use uuid::Uuid;
 
@@ -14,6 +14,7 @@ pub struct Vinyl {
     pub artist: String,
     pub title: String,
     pub release_year: Option<i32>,
+    #[serde(serialize_with = "serialize_optional_genres")]
     pub genre: Option<String>,
     pub notes: Option<String>,
     pub cover_image_url: Option<String>,
@@ -35,6 +36,7 @@ pub struct CreateVinyl {
     pub title: String,
     #[serde(alias = "year")]
     pub release_year: Option<i32>,
+    #[serde(default, deserialize_with = "deserialize_optional_genres")]
     pub genre: Option<String>,
     pub notes: Option<String>,
     #[serde(alias = "cover_url")]
@@ -67,6 +69,113 @@ where
     }
 }
 
+fn serialize_optional_genres<S>(
+    genre: &Option<String>,
+    serializer: S,
+) -> std::result::Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let genres = genre
+        .as_deref()
+        .map(parse_genre_list)
+        .filter(|genres| !genres.is_empty());
+    genres.serialize(serializer)
+}
+
+fn deserialize_optional_genres<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    match value {
+        Some(value) => genre_value_to_storage(value),
+        None => Ok(None),
+    }
+}
+
+fn deserialize_genre_patch<'de, D>(
+    deserializer: D,
+) -> std::result::Result<PatchField<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    match value {
+        Some(value) => Ok(genre_value_to_storage(value)?
+            .map_or(PatchField::Null, PatchField::Value)),
+        None => Ok(PatchField::Null),
+    }
+}
+
+fn genre_value_to_storage<E>(value: serde_json::Value) -> std::result::Result<Option<String>, E>
+where
+    E: de::Error,
+{
+    match value {
+        serde_json::Value::String(value) => Ok(normalize_genre(value)),
+        serde_json::Value::Array(values) => {
+            let mut genres = Vec::new();
+            for value in values {
+                match value {
+                    serde_json::Value::String(value) => genres.extend(parse_genre_list(&value)),
+                    other => {
+                        return Err(E::custom(format!(
+                            "genre values must be strings, got {other}"
+                        )))
+                    }
+                }
+            }
+            Ok(normalize_genre_list(genres))
+        }
+        other => Err(E::custom(format!(
+            "genre must be a string or list of strings, got {other}"
+        ))),
+    }
+}
+
+fn normalize_genre(value: impl AsRef<str>) -> Option<String> {
+    normalize_genre_list(parse_genre_list(value.as_ref()))
+}
+
+fn normalize_genre_list(genres: Vec<String>) -> Option<String> {
+    let mut normalized = Vec::new();
+    for genre in genres {
+        if !normalized
+            .iter()
+            .any(|existing: &String| existing.eq_ignore_ascii_case(&genre))
+        {
+            normalized.push(genre);
+        }
+    }
+
+    (!normalized.is_empty()).then(|| normalized.join(", "))
+}
+
+fn parse_genre_list(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|genre| !genre.is_empty())
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn genre_list_contains(value: &str, filter: &str) -> bool {
+    parse_genre_list(value)
+        .iter()
+        .any(|genre| genre.eq_ignore_ascii_case(filter))
+}
+
+fn primary_genre_sort_key(value: &str) -> Option<String> {
+    parse_genre_list(value)
+        .into_iter()
+        .next()
+        .map(|genre| genre.to_lowercase())
+}
+
 /// Input for updating a vinyl
 #[derive(Debug, Deserialize)]
 pub struct UpdateVinyl {
@@ -76,7 +185,7 @@ pub struct UpdateVinyl {
     pub title: PatchField<String>,
     #[serde(default)]
     pub release_year: PatchField<i32>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_genre_patch")]
     pub genre: PatchField<String>,
     #[serde(default)]
     pub notes: PatchField<String>,
@@ -213,7 +322,7 @@ impl Vinyl {
                 vinyl
                     .genre
                     .as_deref()
-                    .is_some_and(|genre| genre.eq_ignore_ascii_case(genre_filter))
+                    .is_some_and(|genre| genre_list_contains(genre, genre_filter))
             });
         }
 
@@ -252,6 +361,7 @@ impl Vinyl {
             ));
         }
 
+        let genre = input.genre.and_then(normalize_genre);
         let id = Uuid::new_v4().to_string();
         let now = Utc::now();
         let metadata_status = "pending".to_string();
@@ -268,7 +378,7 @@ impl Vinyl {
         .bind(&artist)
         .bind(&title)
         .bind(input.release_year)
-        .bind(&input.genre)
+        .bind(&genre)
         .bind(&input.notes)
         .bind(&input.cover_image_url)
         .bind(now)
@@ -282,7 +392,7 @@ impl Vinyl {
             artist,
             title,
             release_year: input.release_year,
-            genre: input.genre,
+            genre,
             notes: input.notes,
             cover_image_url: input.cover_image_url,
             created_at: now,
@@ -345,10 +455,7 @@ impl Vinyl {
         let genre = match input.genre {
             PatchField::Missing => existing.genre.clone(),
             PatchField::Null => None,
-            PatchField::Value(value) => {
-                let trimmed = value.trim().to_string();
-                (!trimmed.is_empty()).then_some(trimmed)
-            }
+            PatchField::Value(value) => normalize_genre(value),
         };
         let notes = match input.notes {
             PatchField::Missing => existing.notes.clone(),
@@ -435,6 +542,8 @@ impl Vinyl {
 
     /// Update fields populated by album metadata enrichment.
     pub async fn update_metadata(pool: &SqlitePool, id: &str, input: MetadataUpdate) -> Result<()> {
+        let genre = input.genre.and_then(normalize_genre);
+
         let result = sqlx::query(
             r#"
             UPDATE vinyls
@@ -454,7 +563,7 @@ impl Vinyl {
             "#,
         )
         .bind(input.release_year)
-        .bind(&input.genre)
+        .bind(&genre)
         .bind(&input.notes)
         .bind(&input.cover_image_url)
         .bind(&input.metadata_status)
@@ -593,8 +702,8 @@ fn sort_vinyls(vinyls: &mut [Vinyl], sort: Option<&str>) {
                 .then_with(|| compare_artist_title(left, right))
         }),
         "genre" => vinyls.sort_by(|left, right| {
-            let left_genre = left.genre.as_deref().map(str::to_lowercase);
-            let right_genre = right.genre.as_deref().map(str::to_lowercase);
+            let left_genre = left.genre.as_deref().and_then(primary_genre_sort_key);
+            let right_genre = right.genre.as_deref().and_then(primary_genre_sort_key);
 
             left_genre
                 .is_none()
@@ -741,6 +850,44 @@ mod tests {
         assert_eq!(results.len(), 1);
     }
 
+    #[test]
+    fn test_genres_serialize_as_lists_and_deserialize_from_lists() {
+        let input: CreateVinyl = serde_json::from_value(serde_json::json!({
+            "artist": "Artist",
+            "title": "Album",
+            "genre": ["Rock", "Rap", "rock"]
+        }))
+        .unwrap();
+        assert_eq!(input.genre.as_deref(), Some("Rock, Rap"));
+
+        let update: UpdateVinyl = serde_json::from_value(serde_json::json!({
+            "genre": "Rock, Rap"
+        }))
+        .unwrap();
+        assert_eq!(update.genre, PatchField::Value("Rock, Rap".to_string()));
+
+        let serialized = serde_json::to_value(Vinyl {
+            id: "id".to_string(),
+            artist: "Artist".to_string(),
+            title: "Album".to_string(),
+            release_year: None,
+            genre: Some("Rock, Rap".to_string()),
+            notes: None,
+            cover_image_url: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            metadata_status: "complete".to_string(),
+            metadata_source: None,
+            metadata_source_id: None,
+            metadata_source_url: None,
+            metadata_candidates: None,
+            metadata_error: None,
+            metadata_checked_at: None,
+        })
+        .unwrap();
+        assert_eq!(serialized["genre"], serde_json::json!(["Rock", "Rap"]));
+    }
+
     #[tokio::test]
     async fn test_list_sorted() {
         let pool = setup_test_db().await;
@@ -803,7 +950,7 @@ mod tests {
                 artist: "Pink Floyd".to_string(),
                 title: "The Wall".to_string(),
                 release_year: Some(1979),
-                genre: Some("Rock".to_string()),
+                genre: Some("Psychedelic Rock, Rock".to_string()),
                 notes: None,
                 cover_image_url: None,
             },
@@ -841,7 +988,7 @@ mod tests {
                 .iter()
                 .map(|vinyl| vinyl.genre.as_deref().unwrap_or_default())
                 .collect::<Vec<_>>(),
-            vec!["Jazz", "Rap", "Rock"]
+            vec!["Jazz", "Psychedelic Rock, Rock", "Rap"]
         );
 
         let only_rock = Vinyl::list(&pool, None, false, Some("rock".to_string()), None)

@@ -6,6 +6,7 @@ import {
   selectVinylMetadataCandidate,
   updateVinyl,
 } from '../utils/api';
+import { formatGenres, parseGenreInput } from '../utils/genres';
 import { hasMissingMetadata, missingMetadataItems } from '../utils/metadata';
 import { ImageUpload } from './ImageUpload';
 
@@ -104,6 +105,39 @@ function DetailField({ label, value }: { label: string; value?: string | number 
   );
 }
 
+function GenreTags({ genres }: { genres?: string[] | null }) {
+  const visibleGenres = genres?.filter((genre) => genre.trim().length > 0) ?? [];
+
+  if (visibleGenres.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="genre-tags" aria-label="Genres">
+      {visibleGenres.map((genre) => (
+        <span key={genre} className="genre-tag">
+          {genre}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function GenreDetailField({ genres }: { genres?: string[] | null }) {
+  if (!genres?.length) {
+    return null;
+  }
+
+  return (
+    <div className="album-detail-field">
+      <dt>Genre</dt>
+      <dd>
+        <GenreTags genres={genres} />
+      </dd>
+    </div>
+  );
+}
+
 function AlbumDetailsModal({
   vinyl,
   details,
@@ -161,7 +195,7 @@ function AlbumDetailsModal({
           <section className="album-detail-content" aria-label="Album information">
             <dl className="album-detail-fields">
               <DetailField label="Artist" value={displayVinyl.artist} />
-              <DetailField label="Genre" value={displayVinyl.genre} />
+              <GenreDetailField genres={displayVinyl.genre} />
               <DetailField label="Released" value={details?.release_date ?? displayVinyl.release_year} />
               <DetailField label="Format" value={details?.release_format} />
               <DetailField label="Country" value={details?.release_country} />
@@ -337,7 +371,7 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
   const [artist, setArtist] = useState(vinyl.artist);
   const [title, setTitle] = useState(vinyl.title);
   const [releaseYear, setReleaseYear] = useState(vinyl.release_year?.toString() ?? '');
-  const [genre, setGenre] = useState(vinyl.genre ?? '');
+  const [genre, setGenre] = useState(formatGenres(vinyl.genre));
   const [notes, setNotes] = useState(vinyl.notes ?? '');
   const [coverImageUrl, setCoverImageUrl] = useState(vinyl.cover_image_url ?? '');
   const [submitting, setSubmitting] = useState(false);
@@ -349,7 +383,7 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
     setArtist(vinyl.artist);
     setTitle(vinyl.title);
     setReleaseYear(vinyl.release_year?.toString() ?? '');
-    setGenre(vinyl.genre ?? '');
+    setGenre(formatGenres(vinyl.genre));
     setNotes(vinyl.notes ?? '');
     setCoverImageUrl(vinyl.cover_image_url ?? '');
     setError(null);
@@ -476,7 +510,7 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
       artist: trimmedArtist,
       title: trimmedTitle,
       release_year: parsedReleaseYear,
-      genre: trimmedGenre || null,
+      genre: parseGenreInput(trimmedGenre),
       notes: trimmedNotes || null,
       cover_image_url: trimmedCoverImageUrl || null,
     };
@@ -521,7 +555,7 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
       setMetadataPreviewVinyl(refreshedVinyl);
       setNeedsParentRefreshOnClose(true);
       setReleaseYear(refreshedVinyl.release_year?.toString() ?? '');
-      setGenre(refreshedVinyl.genre ?? '');
+      setGenre(formatGenres(refreshedVinyl.genre));
       setNotes(refreshedVinyl.notes ?? '');
       setCoverImageUrl(refreshedVinyl.cover_image_url ?? '');
     } catch (err) {
@@ -575,7 +609,7 @@ export function VinylCard({ vinyl, isAdmin = false, onDelete, onUpdate }: VinylC
                 {vinyl.release_year}
               </p>
             )}
-            {vinyl.genre && <p className="vinyl-genre">{vinyl.genre}</p>}
+            <GenreTags genres={vinyl.genre} />
             {vinyl.notes && !isGeneratedMetadataNote(vinyl.notes) && (
               <p className="vinyl-notes">{vinyl.notes}</p>
             )}

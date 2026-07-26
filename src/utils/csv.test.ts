@@ -14,7 +14,7 @@ describe('parseCSV', () => {
       year: 1969,
       notes: 'Final album',
       cover_url: 'https://example.com/cover.jpg',
-      genre: 'Rock',
+      genre: ['Rock'],
     });
   });
 
@@ -87,7 +87,7 @@ Pink Floyd,The Wall,1979
       artist: 'Pink Floyd',
       title: 'The Dark Side of the Moon',
       year: 1973,
-      genre: 'Rock',
+      genre: ['Rock'],
     });
   });
 

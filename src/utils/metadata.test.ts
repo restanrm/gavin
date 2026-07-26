@@ -13,7 +13,7 @@ describe('hasMissingMetadata', () => {
   it.each<Vinyl['metadata_status']>(['complete', 'disabled'])(
     'does not treat %s as missing metadata when genre is present',
     (metadata_status) => {
-      expect(hasMissingMetadata({ metadata_status, genre: 'Rock' })).toBe(false);
+      expect(hasMissingMetadata({ metadata_status, genre: ['Rock'] })).toBe(false);
     },
   );
 
@@ -45,7 +45,7 @@ describe('missingMetadataItems', () => {
       missingMetadataItems({
         metadata_status: 'needs_choice',
         release_year: 1969,
-        genre: 'Rock',
+        genre: ['Rock'],
         cover_image_url: '/uploads/album-covers/cover.jpg',
         metadata_source_url: null,
       }),

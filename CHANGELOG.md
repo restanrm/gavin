@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Album genres are exposed as lists in the API, split from comma-separated admin edit input, and displayed as individual genre tags instead of comma-separated text.
+
 ## [0.2.5] - 2026-07-26
 
 ### Added

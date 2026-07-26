@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { createVinyl } from '../utils/api';
+import { parseGenreInput } from '../utils/genres';
 
 interface VinylFormProps {
   onSuccess: () => void;
@@ -31,7 +32,7 @@ export function VinylForm({ onSuccess }: VinylFormProps) {
         artist: artist.trim(),
         title: title.trim(),
         ...(releaseYear && { release_year: parseInt(releaseYear, 10) }),
-        ...(genre.trim() && { genre: genre.trim() }),
+        ...(genre.trim() && { genre: parseGenreInput(genre) }),
         ...(notes.trim() && { notes: notes.trim() }),
         ...(coverImageUrl.trim() && { cover_image_url: coverImageUrl.trim() }),
       };

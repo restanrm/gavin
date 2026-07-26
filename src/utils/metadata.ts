@@ -1,4 +1,5 @@
 import type { Vinyl } from '../types';
+import { hasGenres } from './genres';
 
 type MetadataSummaryVinyl = Pick<
   Vinyl,
@@ -10,7 +11,7 @@ export function hasMissingMetadata(
 ): boolean {
   return (
     (vinyl.metadata_status !== 'complete' && vinyl.metadata_status !== 'disabled')
-    || !vinyl.genre?.trim()
+    || !hasGenres(vinyl.genre)
   );
 }
 
@@ -39,7 +40,7 @@ export function missingMetadataItems(vinyl: MetadataSummaryVinyl): string[] {
     items.push('Release year');
   }
 
-  if (!vinyl.genre) {
+  if (!hasGenres(vinyl.genre)) {
     items.push('Genre');
   }
 

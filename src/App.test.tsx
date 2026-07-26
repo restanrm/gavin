@@ -10,7 +10,7 @@ const vinyls: Vinyl[] = [
     title: 'Complete Record',
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',
-    genre: 'Rock',
+    genre: ['Rock'],
     release_year: 1970,
     metadata_status: 'complete',
   },
@@ -20,7 +20,7 @@ const vinyls: Vinyl[] = [
     title: 'Missing Metadata Record',
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',
-    genre: 'Rap',
+    genre: ['Rap'],
     release_year: 1990,
     metadata_status: 'not_found',
   },
@@ -79,10 +79,10 @@ describe('App admin metadata filter', () => {
         return Promise.resolve(jsonResponse(vinyls));
       }
       if (url === '/api/vinyls?genre=Rock') {
-        return Promise.resolve(jsonResponse(vinyls.filter((vinyl) => vinyl.genre === 'Rock')));
+        return Promise.resolve(jsonResponse(vinyls.filter((vinyl) => vinyl.genre?.includes('Rock'))));
       }
       if (url === '/api/vinyls?genre=Rock&sort=date') {
-        return Promise.resolve(jsonResponse(vinyls.filter((vinyl) => vinyl.genre === 'Rock')));
+        return Promise.resolve(jsonResponse(vinyls.filter((vinyl) => vinyl.genre?.includes('Rock'))));
       }
       return Promise.reject(new Error(`Unexpected fetch: ${url}`));
     });

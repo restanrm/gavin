@@ -14,7 +14,7 @@ A Rust + React web application for browsing and managing a family vinyl record l
   - Edit album information from catalog cards
   - Filter the catalog to albums with missing metadata for review
   - Save edited album information and retry metadata enrichment from the edit dialog
-  - Store, edit, display, and enrich album music genres (rap, R&B, rock, etc.)
+  - Store, edit, enrich, and display album music genres as individual tags (rap, R&B, rock, etc.)
   - See exactly which metadata fields or lookup steps are missing in the edit dialog
   - Upload cover images
   - Bulk import via CSV
@@ -195,7 +195,7 @@ The frontend expects the following API endpoints:
   artist: string;
   title: string;
   release_year?: number | null;
-  genre?: string | null;
+  genre?: string[] | null;
   notes?: string | null;
   cover_image_url?: string | null;
   created_at: string;
@@ -285,7 +285,7 @@ artist,title,year,notes,cover_url,genre
 - **year** (optional): Release year (must be a number)
 - **notes** (optional): Additional notes
 - **cover_url** (optional): URL to cover image
-- **genre** (optional): Album genre (for example Rap, R&B, Rock, Jazz)
+- **genre** (optional): Album genre list. In admin edit fields, separate multiple genres with commas (for example `Rap, R&B, Rock`).
 
 Bulk imports are enriched against MusicBrainz one album at a time. If several plausible albums match one CSV row, the row is created with `metadata_status: "needs_choice"` and the candidate albums are stored in `metadata_candidates` for admin review.
 
