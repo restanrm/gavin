@@ -36,9 +36,21 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   return response.json();
 }
 
-export async function getVinyls(search?: string): Promise<Vinyl[]> {
-  const params = search ? `?search=${encodeURIComponent(search)}` : '';
-  return fetchJSON<Vinyl[]>(`${BASE_URL}/vinyls${params}`);
+interface VinylListOptions {
+  missingMetadataOnly?: boolean;
+}
+
+export async function getVinyls(search?: string, options: VinylListOptions = {}): Promise<Vinyl[]> {
+  const params = new URLSearchParams();
+  if (search) {
+    params.set('search', search);
+  }
+  if (options.missingMetadataOnly) {
+    params.set('metadata', 'missing');
+  }
+
+  const query = params.toString();
+  return fetchJSON<Vinyl[]>(`${BASE_URL}/vinyls${query ? `?${query}` : ''}`);
 }
 
 export async function getVinylDetails(id: string): Promise<AlbumDetails> {

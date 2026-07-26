@@ -126,9 +126,13 @@ pub struct BulkCreateRequest {
 }
 
 impl Vinyl {
-    /// List all vinyls with optional search
-    pub async fn list(pool: &SqlitePool, search: Option<String>) -> Result<Vec<Self>> {
-        let vinyls = if let Some(search_term) = search {
+    /// List all vinyls with optional search and metadata status filtering.
+    pub async fn list(
+        pool: &SqlitePool,
+        search: Option<String>,
+        missing_metadata_only: bool,
+    ) -> Result<Vec<Self>> {
+        let mut vinyls = if let Some(search_term) = search {
             let trimmed = search_term.trim().to_lowercase();
             if trimmed.is_empty() {
                 // Empty search, fetch all
@@ -180,6 +184,10 @@ impl Vinyl {
             .fetch_all(pool)
             .await?
         };
+
+        if missing_metadata_only {
+            vinyls.retain(|vinyl| vinyl.metadata_status != "complete" && vinyl.metadata_status != "disabled");
+        }
 
         Ok(vinyls)
     }
@@ -601,22 +609,22 @@ mod tests {
         .unwrap();
 
         // Search lowercase
-        let results = Vinyl::list(&pool, Some("beatles".to_string())).await.unwrap();
+        let results = Vinyl::list(&pool, Some("beatles".to_string()), false).await.unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].artist, "The Beatles");
 
         // Search uppercase
-        let results = Vinyl::list(&pool, Some("PINK".to_string())).await.unwrap();
+        let results = Vinyl::list(&pool, Some("PINK".to_string()), false).await.unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].artist, "Pink Floyd");
 
         // Search title
-        let results = Vinyl::list(&pool, Some("wall".to_string())).await.unwrap();
+        let results = Vinyl::list(&pool, Some("wall".to_string()), false).await.unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].title, "The Wall");
 
         // Search with whitespace
-        let results = Vinyl::list(&pool, Some("  floyd  ".to_string())).await.unwrap();
+        let results = Vinyl::list(&pool, Some("  floyd  ".to_string()), false).await.unwrap();
         assert_eq!(results.len(), 1);
     }
 
@@ -650,10 +658,65 @@ mod tests {
         .await
         .unwrap();
 
-        let results = Vinyl::list(&pool, None).await.unwrap();
+        let results = Vinyl::list(&pool, None, false).await.unwrap();
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].artist, "Beatles");
         assert_eq!(results[1].artist, "Zeppelin");
+    }
+
+    #[tokio::test]
+    async fn test_list_missing_metadata_only() {
+        let pool = setup_test_db().await;
+
+        let pending = Vinyl::create(
+            &pool,
+            CreateVinyl {
+                artist: "Pending Artist".to_string(),
+                title: "Pending Album".to_string(),
+                release_year: None,
+                notes: None,
+                cover_image_url: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let complete = Vinyl::create(
+            &pool,
+            CreateVinyl {
+                artist: "Complete Artist".to_string(),
+                title: "Complete Album".to_string(),
+                release_year: None,
+                notes: None,
+                cover_image_url: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        Vinyl::update_metadata(
+            &pool,
+            &complete.id,
+            MetadataUpdate {
+                release_year: None,
+                notes: None,
+                cover_image_url: None,
+                metadata_status: "complete".to_string(),
+                metadata_source: Some("musicbrainz".to_string()),
+                metadata_source_id: Some("mbid".to_string()),
+                metadata_source_url: Some("https://musicbrainz.org/release-group/mbid".to_string()),
+                metadata_candidates: None,
+                metadata_error: None,
+                metadata_checked_at: Some(Utc::now()),
+            },
+        )
+        .await
+        .unwrap();
+
+        let results = Vinyl::list(&pool, None, true).await.unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, pending.id);
     }
 
     #[tokio::test]

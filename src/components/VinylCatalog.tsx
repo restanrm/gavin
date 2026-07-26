@@ -8,9 +8,10 @@ interface VinylCatalogProps {
   error: string | null;
   isAdmin: boolean;
   onVinylsUpdate: () => void;
+  emptyMessage?: string;
 }
 
-export function VinylCatalog({ vinyls, loading, error, isAdmin, onVinylsUpdate }: VinylCatalogProps) {
+export function VinylCatalog({ vinyls, loading, error, isAdmin, onVinylsUpdate, emptyMessage }: VinylCatalogProps) {
   const handleDelete = async (id: string) => {
     try {
       await deleteVinyl(id);
@@ -39,7 +40,7 @@ export function VinylCatalog({ vinyls, loading, error, isAdmin, onVinylsUpdate }
   if (vinyls.length === 0) {
     return (
       <div className="catalog-status empty">
-        <p>No vinyls found. {isAdmin && 'Add some using the form above!'}</p>
+        <p>{emptyMessage ?? <>No vinyls found. {isAdmin && 'Add some using the form above!'}</>}</p>
       </div>
     );
   }

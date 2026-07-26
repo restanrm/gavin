@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Admin metadata-missing catalog filter** to show only albums whose metadata still needs review or retry.
+
 ## [0.2.4] - 2026-07-26
 
 ### Added

@@ -8,14 +8,19 @@ import { SearchBar } from './components/SearchBar';
 import { VinylCatalog } from './components/VinylCatalog';
 import { AdminPanel } from './components/AdminPanel';
 import { LibraryStats } from './components/LibraryStats';
+import { hasMissingMetadata } from './utils/metadata';
 import './App.css';
 
 function App() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [showMissingMetadataOnly, setShowMissingMetadataOnly] = useState(false);
   const debouncedSearch = useDebounce(searchQuery, 300);
   
   const { isAuthenticated, user, loading: authLoading, refreshAuth } = useAuth();
-  const { vinyls, loading: vinylsLoading, error, refetch } = useVinyls(debouncedSearch);
+  const metadataFilterEnabled = isAuthenticated && showMissingMetadataOnly;
+  const { vinyls, loading: vinylsLoading, error, refetch } = useVinyls(debouncedSearch, {
+    missingMetadataOnly: metadataFilterEnabled,
+  });
   const {
     vinyls: libraryVinyls,
     loading: libraryStatsLoading,
@@ -35,9 +40,16 @@ function App() {
   };
 
   const searchIsActive = debouncedSearch.trim().length > 0;
-  const statsVinyls = searchIsActive ? libraryVinyls : vinyls;
-  const statsLoading = searchIsActive ? libraryStatsLoading : vinylsLoading;
-  const statsError = searchIsActive ? libraryStatsError : error;
+  const catalogFilterIsActive = searchIsActive || metadataFilterEnabled;
+  const missingMetadataCount = vinyls.filter(hasMissingMetadata).length;
+  const emptyCatalogMessage = metadataFilterEnabled
+    ? searchIsActive
+      ? 'No albums with missing metadata match your search.'
+      : 'No albums with missing metadata found.'
+    : undefined;
+  const statsVinyls = catalogFilterIsActive ? libraryVinyls : vinyls;
+  const statsLoading = catalogFilterIsActive ? libraryStatsLoading : vinylsLoading;
+  const statsError = catalogFilterIsActive ? libraryStatsError : error;
 
   return (
     <div className="app">
@@ -67,6 +79,22 @@ function App() {
             onChange={setSearchQuery}
             placeholder="Search by artist or title..."
           />
+
+          {isAuthenticated && (
+            <div className="admin-catalog-filters" aria-label="Admin catalog filters">
+              <label className="metadata-filter-toggle">
+                <input
+                  type="checkbox"
+                  checked={showMissingMetadataOnly}
+                  onChange={(event) => setShowMissingMetadataOnly(event.target.checked)}
+                />
+                <span>Show only albums with missing metadata</span>
+                <span className="metadata-filter-count" aria-label={`${missingMetadataCount} albums with missing metadata`}>
+                  {missingMetadataCount}
+                </span>
+              </label>
+            </div>
+          )}
         </div>
 
         {isAuthenticated && (
@@ -80,6 +108,7 @@ function App() {
             error={error}
             isAdmin={isAuthenticated}
             onVinylsUpdate={handleVinylsUpdate}
+            emptyMessage={emptyCatalogMessage}
           />
         </section>
       </main>

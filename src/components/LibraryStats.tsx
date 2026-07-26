@@ -1,4 +1,5 @@
 import type { Vinyl } from '../types';
+import { hasMissingMetadata } from '../utils/metadata';
 
 interface LibraryStatsProps {
   vinyls: Vinyl[];
@@ -9,10 +10,6 @@ interface LibraryStatsProps {
 
 function pluralize(count: number, singular: string, plural = `${singular}s`): string {
   return `${count} ${count === 1 ? singular : plural}`;
-}
-
-function needsMetadataReview(status: Vinyl['metadata_status']): boolean {
-  return status !== 'complete' && status !== 'disabled';
 }
 
 export function LibraryStats({ vinyls, loading = false, error = null, isAdmin = false }: LibraryStatsProps) {
@@ -38,7 +35,7 @@ export function LibraryStats({ vinyls, loading = false, error = null, isAdmin = 
     .filter((year): year is number => typeof year === 'number')
     .sort((a, b) => a - b);
   const coverCount = vinyls.filter((vinyl) => Boolean(vinyl.cover_image_url)).length;
-  const reviewCount = vinyls.filter((vinyl) => needsMetadataReview(vinyl.metadata_status)).length;
+  const reviewCount = vinyls.filter(hasMissingMetadata).length;
 
   const yearLabel = years.length > 0
     ? years[0] === years[years.length - 1]

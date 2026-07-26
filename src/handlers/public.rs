@@ -11,14 +11,16 @@ use crate::{db::Vinyl, error::Result, routes::AppState};
 #[derive(Deserialize)]
 pub struct SearchQuery {
     pub search: Option<String>,
+    pub metadata: Option<String>,
 }
 
-/// List vinyls with optional search
+/// List vinyls with optional search and metadata status filtering.
 pub async fn list_vinyls(
     State(state): State<AppState>,
     Query(query): Query<SearchQuery>,
 ) -> Result<Json<Vec<Vinyl>>> {
-    let vinyls = Vinyl::list(&state.pool, query.search).await?;
+    let missing_metadata_only = query.metadata.as_deref() == Some("missing");
+    let vinyls = Vinyl::list(&state.pool, query.search, missing_metadata_only).await?;
     Ok(Json(vinyls))
 }
 

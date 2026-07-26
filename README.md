@@ -11,6 +11,7 @@ A Rust + React web application for browsing and managing a family vinyl record l
 - **Admin Controls**: 
   - Add individual vinyl records
   - Edit album information from catalog cards
+  - Filter the catalog to albums with missing metadata for review
   - Upload cover images
   - Bulk import via CSV
   - Delete records
@@ -159,7 +160,7 @@ The frontend expects the following API endpoints:
 
 ### Public Endpoints
 
-- `GET /api/vinyls?search=` - Get all vinyls (with optional search)
+- `GET /api/vinyls?search=&metadata=missing` - Get all vinyls (with optional search and missing-metadata filter)
 - `GET /api/vinyls/:id/details` - Get album details for a vinyl, including MusicBrainz song lists when available
 - `GET /api/auth/me` - Get authentication status
 - `GET /api/auth/login` - Redirect to OIDC login
