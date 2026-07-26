@@ -350,6 +350,7 @@ Key configuration options:
 
 **Album Metadata Enrichment**:
 - Creating a vinyl (single or bulk) performs a best-effort lookup via MusicBrainz and stores release year, a local cover art URL when caching succeeds, source URL, and lookup status in SQLite.
+- If the initial MusicBrainz lookup is missing or low-confidence, Gavin also checks French vinyl retailer search pages (FNAC and Cultura) for album-title hints, then resolves those hints back through MusicBrainz.
 - Cover thumbnails discovered through MusicBrainz/Cover Art Archive, artist searches, cover-photo imports, or manual cover URLs are cached under `UPLOAD_DIR/album-covers` when possible so catalog thumbnails load from Gavin instead of the public internet.
 - Cover-photo imports use the configured visual recognition provider to find MusicBrainz candidates, then store a local Gavin-served copy of the official Cover Art Archive thumbnail for the imported album.
 - If multiple plausible album matches exist, Gavin marks the record as `needs_choice` and stores candidate choices instead of guessing.

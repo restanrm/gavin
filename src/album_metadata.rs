@@ -23,6 +23,16 @@ use crate::{
 };
 
 const SOURCE_NAME: &str = "musicbrainz";
+const FRENCH_RETAIL_SOURCES: &[(&str, &str)] = &[
+    (
+        "fnac",
+        "https://www.fnac.com/SearchResult/ResultList.aspx?Search=",
+    ),
+    (
+        "cultura",
+        "https://www.cultura.com/search/results?search_query=",
+    ),
+];
 const STARTUP_BATCH_SIZE: i64 = 100;
 const STARTUP_COVER_CACHE_BATCH_SIZE: i64 = 1_000;
 const COVER_CACHE_URL_PREFIX: &str = "/uploads/album-covers";
@@ -604,6 +614,27 @@ impl AlbumMetadataClient {
     async fn lookup(&self, artist: &str, title: &str) -> anyhow::Result<LookupOutcome> {
         let mut candidates = self.search_musicbrainz(artist, title).await?;
 
+        if candidates.is_empty()
+            || !candidates
+                .iter()
+                .any(|candidate| candidate.score.unwrap_or(0) >= 90)
+        {
+            match self
+                .search_musicbrainz_with_french_retail_hints(artist, title)
+                .await
+            {
+                Ok(retail_candidates) => candidates.extend(retail_candidates),
+                Err(err) => tracing::warn!(
+                    artist,
+                    title,
+                    error = %err,
+                    "French retail album metadata hint lookup failed"
+                ),
+            }
+        }
+
+        dedupe_candidates_by_id(&mut candidates);
+
         if candidates.is_empty() {
             return Ok(LookupOutcome::NotFound);
         }
@@ -682,6 +713,79 @@ impl AlbumMetadataClient {
             .into_iter()
             .map(AlbumCandidate::from)
             .collect())
+    }
+
+    async fn search_musicbrainz_with_french_retail_hints(
+        &self,
+        artist: &str,
+        title: &str,
+    ) -> anyhow::Result<Vec<AlbumCandidate>> {
+        let hints = self.french_retail_album_terms(artist, title).await;
+        if hints.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut candidates = Vec::<AlbumCandidate>::new();
+        for (index, query) in french_retail_musicbrainz_queries(&hints, artist, title)
+            .into_iter()
+            .enumerate()
+        {
+            if index > 0 {
+                tokio::time::sleep(Duration::from_millis(1100)).await;
+            }
+
+            match self.search_musicbrainz_query(&query, 5).await {
+                Ok(matches) => candidates.extend(matches),
+                Err(err) => tracing::warn!(
+                    query,
+                    error = %err,
+                    "MusicBrainz search from French retail hint failed"
+                ),
+            }
+        }
+
+        dedupe_candidates_by_id(&mut candidates);
+        Ok(candidates)
+    }
+
+    async fn french_retail_album_terms(&self, artist: &str, title: &str) -> Vec<String> {
+        let mut terms = Vec::<String>::new();
+        let query = percent_encode_query(&format!("{artist} {title} vinyle"));
+
+        for (source, base_url) in FRENCH_RETAIL_SOURCES {
+            let url = format!("{base_url}{query}");
+            match self.http.get(&url).send().await {
+                Ok(response) => match response.error_for_status() {
+                    Ok(response) => match response.text().await {
+                        Ok(html) => {
+                            for term in french_retail_album_terms_from_html(
+                                &html, artist, title, source,
+                            ) {
+                                push_search_term(&mut terms, term);
+                            }
+                        }
+                        Err(err) => tracing::warn!(
+                            source,
+                            error = %err,
+                            "failed to read French retail album search response"
+                        ),
+                    },
+                    Err(err) => tracing::warn!(
+                        source,
+                        error = %err,
+                        "French retail album search returned an error status"
+                    ),
+                },
+                Err(err) => tracing::warn!(
+                    source,
+                    error = %err,
+                    "French retail album search request failed"
+                ),
+            }
+        }
+
+        terms.truncate(8);
+        terms
     }
 
     async fn fetch_release_tracklist(
@@ -1670,6 +1774,254 @@ fn escape_lucene_phrase(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+fn french_retail_musicbrainz_queries(
+    terms: &[String],
+    artist: &str,
+    title: &str,
+) -> Vec<String> {
+    let mut queries = Vec::<String>::new();
+
+    for term in terms.iter().take(6) {
+        push_search_term(&mut queries, term.clone());
+        if let Some((hint_artist, hint_title)) = split_artist_title(term) {
+            queries.push(format!(
+                "releasegroup:\"{}\" AND artist:\"{}\"",
+                escape_lucene_phrase(&hint_title),
+                escape_lucene_phrase(&hint_artist)
+            ));
+        } else {
+            queries.push(format!(
+                "{} \"{}\" \"{}\"",
+                term,
+                escape_lucene_phrase(artist),
+                escape_lucene_phrase(title)
+            ));
+        }
+    }
+
+    let mut deduped = Vec::<String>::new();
+    for query in queries {
+        push_search_term(&mut deduped, query);
+        if deduped.len() == 8 {
+            break;
+        }
+    }
+
+    deduped
+}
+
+fn french_retail_album_terms_from_html(
+    html: &str,
+    artist: &str,
+    title: &str,
+    source: &str,
+) -> Vec<String> {
+    let mut terms = Vec::<String>::new();
+    let mut chunks = Vec::<String>::new();
+
+    for attribute in ["content", "alt", "title", "aria-label"] {
+        chunks.extend(html_attribute_values(html, attribute));
+    }
+
+    for tag in ["h1", "h2", "h3", "a"] {
+        chunks.extend(html_tag_texts(html, tag));
+    }
+
+    for chunk in chunks {
+        let term = cleanup_french_retail_album_term(&chunk, source);
+        if french_retail_term_matches_album(&term, artist, title) {
+            push_search_term(&mut terms, term);
+        }
+    }
+
+    terms.truncate(8);
+    terms
+}
+
+fn html_attribute_values(html: &str, attribute: &str) -> Vec<String> {
+    let lower = html.to_ascii_lowercase();
+    let mut values = Vec::<String>::new();
+    let mut offset = 0;
+
+    while let Some(relative_index) = lower[offset..].find(attribute) {
+        let name_start = offset + relative_index;
+        let name_end = name_start + attribute.len();
+        let before = lower[..name_start].chars().next_back();
+        let after = lower[name_end..].chars().next();
+        if before.is_some_and(|character| character.is_ascii_alphanumeric() || character == '-')
+            || after.is_some_and(|character| character.is_ascii_alphanumeric() || character == '-')
+        {
+            offset = name_end;
+            continue;
+        }
+
+        let Some(equals_relative) = lower[name_end..].find('=') else {
+            break;
+        };
+        let equals_index = name_end + equals_relative;
+        if lower[name_end..equals_index].trim().len() > 8 {
+            offset = name_end;
+            continue;
+        }
+
+        let value_start = html[equals_index + 1..]
+            .char_indices()
+            .find_map(|(index, character)| {
+                (!character.is_whitespace()).then_some(equals_index + 1 + index)
+            });
+        let Some(value_start) = value_start else {
+            break;
+        };
+
+        let quote = html[value_start..].chars().next().unwrap_or_default();
+        if quote != '"' && quote != '\'' {
+            offset = value_start + quote.len_utf8();
+            continue;
+        }
+
+        let content_start = value_start + quote.len_utf8();
+        if let Some(content_end_relative) = html[content_start..].find(quote) {
+            let content_end = content_start + content_end_relative;
+            values.push(html[content_start..content_end].to_string());
+            offset = content_end + quote.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    values
+}
+
+fn html_tag_texts(html: &str, tag: &str) -> Vec<String> {
+    let lower = html.to_ascii_lowercase();
+    let open_pattern = format!("<{tag}");
+    let close_pattern = format!("</{tag}>");
+    let mut values = Vec::<String>::new();
+    let mut offset = 0;
+
+    while let Some(open_relative) = lower[offset..].find(&open_pattern) {
+        let open = offset + open_relative;
+        let Some(open_end_relative) = lower[open..].find('>') else {
+            break;
+        };
+        let content_start = open + open_end_relative + 1;
+        let Some(close_relative) = lower[content_start..].find(&close_pattern) else {
+            offset = content_start;
+            continue;
+        };
+        let close = content_start + close_relative;
+        values.push(html[content_start..close].to_string());
+        offset = close + close_pattern.len();
+    }
+
+    values
+}
+
+fn cleanup_french_retail_album_term(value: &str, source: &str) -> String {
+    let decoded = decode_basic_html_entities(&strip_html_tags(value));
+    let normalized_source = normalize(source);
+    let ignored_words = [
+        "achat",
+        "acheter",
+        "album",
+        "albums",
+        "audio",
+        "cultura",
+        "disponible",
+        "disque",
+        "edition",
+        "fnac",
+        "livraison",
+        "musique",
+        "pas",
+        "prix",
+        "recherche",
+        "resultat",
+        "resultats",
+        "tours",
+        "vente",
+        "vinyl",
+        "vinyle",
+    ];
+
+    decoded
+        .replace(['\n', '\r', '\t'], " ")
+        .split_whitespace()
+        .filter(|word| {
+            let normalized = normalize(word);
+            !normalized.is_empty()
+                && normalized != normalized_source
+                && !ignored_words.contains(&normalized.as_str())
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim_matches(|character: char| !character.is_alphanumeric())
+        .to_string()
+}
+
+fn french_retail_term_matches_album(term: &str, artist: &str, title: &str) -> bool {
+    if term.len() < 3 {
+        return false;
+    }
+
+    let normalized_term = normalize(term);
+    let normalized_artist = normalize(artist);
+    let normalized_title = normalize(title);
+    if normalized_term.is_empty() || normalized_title.is_empty() {
+        return false;
+    }
+
+    if normalized_term.contains(&normalized_title)
+        && (normalized_artist.is_empty() || normalized_term.contains(&normalized_artist))
+    {
+        return true;
+    }
+
+    let album_tokens = meaningful_tokens(&format!("{artist} {title}"));
+    if album_tokens.is_empty() {
+        return false;
+    }
+
+    let term_tokens = meaningful_tokens(term);
+    let overlap = album_tokens
+        .iter()
+        .filter(|token| term_tokens.contains(token))
+        .count();
+
+    overlap >= album_tokens.len().min(2)
+}
+
+fn decode_basic_html_entities(value: &str) -> String {
+    value
+        .replace("&amp;", "&")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&apos;", "'")
+        .replace("&nbsp;", " ")
+        .replace("&ndash;", "–")
+        .replace("&mdash;", "—")
+}
+
+fn percent_encode_query(value: &str) -> String {
+    let mut encoded = String::new();
+    for byte in value.as_bytes() {
+        match *byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded.push(*byte as char)
+            }
+            b' ' => encoded.push_str("%20"),
+            byte => encoded.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    encoded
+}
+
+fn dedupe_candidates_by_id(candidates: &mut Vec<AlbumCandidate>) {
+    candidates.sort_by(|left, right| right.score.unwrap_or(0).cmp(&left.score.unwrap_or(0)));
+    let mut seen_ids = std::collections::HashSet::<String>::new();
+    candidates.retain(|candidate| seen_ids.insert(candidate.id.clone()));
+}
+
 fn is_local_cover_url(url: &str) -> bool {
     url.starts_with(COVER_CACHE_URL_PREFIX) || url.starts_with("/uploads/")
 }
@@ -1772,6 +2124,46 @@ mod tests {
         let queries = reverse_image_musicbrainz_queries(&terms);
         assert!(queries.iter().any(|query| query.contains("releasegroup")));
         assert!(queries.iter().any(|query| query == "The Beatles Abbey Road"));
+    }
+
+    #[test]
+    fn extracts_french_retail_album_terms() {
+        let html = r#"
+            <html>
+              <head><meta content="AMOUR SUPREME - Youssoupha - Vinyle album | fnac" /></head>
+              <body>
+                <h2>AMOUR SUPREME Edition Limitée Vinyle Cultura</h2>
+                <a title="Acheter Youssoupha - AMOUR SUPREME pas cher"></a>
+              </body>
+            </html>
+        "#;
+
+        let terms =
+            french_retail_album_terms_from_html(html, "Youssoupha", "Amour Supreme", "fnac");
+
+        assert!(terms.iter().any(|term| term.contains("Youssoupha")));
+        assert!(terms.iter().all(|term| !normalize(term).contains("fnac")));
+        assert!(terms.iter().all(|term| !normalize(term).contains("vinyle")));
+    }
+
+    #[test]
+    fn builds_french_retail_musicbrainz_queries() {
+        let queries = french_retail_musicbrainz_queries(
+            &["Youssoupha - AMOUR SUPREME".to_string()],
+            "Youssoupha",
+            "Amour Supreme",
+        );
+
+        assert!(queries.iter().any(|query| query.contains("releasegroup")));
+        assert!(queries.iter().any(|query| query.contains("Youssoupha")));
+    }
+
+    #[test]
+    fn percent_encodes_retail_search_queries() {
+        assert_eq!(
+            percent_encode_query("Suprême NTM vinyle"),
+            "Supr%C3%AAme%20NTM%20vinyle"
+        );
     }
 
     #[test]

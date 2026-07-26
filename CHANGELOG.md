@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Footer library stats counter** showing compact album, artist, year range, cover, and admin metadata-review counts at the bottom of the page.
+- **French vinyl retailer metadata hints** using FNAC and Cultura search pages as best-effort fallbacks before marking album metadata as not found.
 
 ## [0.2.3] - 2026-07-25
 
